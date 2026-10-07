@@ -13,8 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.innerHTML = '';
 
         const interval = document.getElementById('timeframe-select').value;
+        const category = document.getElementById('category-select').value;
         try {
-            const response = await fetch(`/api/scan?interval=${interval}`);
+            const response = await fetch(`/api/scan?interval=${interval}&category=${category}`);
             const result = await response.json();
 
             if (result.status === 'success') {
