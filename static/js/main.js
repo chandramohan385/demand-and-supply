@@ -189,7 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 domain: [0, 1],
                 range: [viewStartDate, futureDate],
                 rangeslider: {visible: false}, type: 'date', gridcolor: 'rgba(255,255,255,0.05)',
-                fixedrange: false
+                fixedrange: false,
+                showspikes: true, spikemode: 'across', spikethickness: 1, spikedash: 'dot', spikecolor: '#8b949e'
             },
             yaxis: {
                 autorange: false, 
@@ -197,11 +198,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 type: 'linear', 
                 gridcolor: 'rgba(255,255,255,0.05)',
                 fixedrange: false,
+                side: 'right',
+                showspikes: true, spikemode: 'across', spikethickness: 1, spikedash: 'dot', spikecolor: '#8b949e',
                 range: [
                     Math.min(...item.history.map(h => h.Low)) * 0.95,
                     Math.max(...item.history.map(h => h.High)) * 1.05
                 ]
             },
+            hovermode: 'x unified',
             plot_bgcolor: '#0a0c10',
             paper_bgcolor: '#0a0c10',
             font: { color: '#e6edf3' },
@@ -223,6 +227,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     type: 'rect', xref: 'x', yref: 'y',
                     x0: startDate, y0: entry, x1: futureDate, y1: sl,
                     fillcolor: riskFillColor, line: { width: 0 }
+                },
+                // 4. Current Price Line (Dotted)
+                {
+                    type: 'line', xref: 'paper', yref: 'y',
+                    x0: 0, x1: 1, y0: item.current_price, y1: item.current_price,
+                    line: { color: 'rgba(255, 255, 255, 0.4)', width: 1, dash: 'dot' }
                 }
             ],
             annotations: [
@@ -234,6 +244,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     showarrow: false,
                     font: { color: '#e6edf3', size: 13, family: 'Outfit, sans-serif' },
                     xanchor: 'left', xshift: 10
+                },
+                // Current Price Label on Y-axis
+                {
+                    x: 1, y: item.current_price,
+                    xref: 'paper', yref: 'y',
+                    text: `  ₹${item.current_price.toFixed(2)}`,
+                    showarrow: false,
+                    font: { color: '#ffffff', size: 12, family: 'Outfit, sans-serif' },
+                    xanchor: 'left', bgcolor: 'rgba(0,0,0,0.6)', borderpad: 3
                 }
             ]
         };
