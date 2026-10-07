@@ -79,6 +79,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
             `;
             
+            // Mobile tap support for score tooltip
+            const tooltipContainer = tr.querySelector('.tooltip-container');
+            if (tooltipContainer) {
+                tooltipContainer.addEventListener('click', (e) => {
+                    if (window.innerWidth <= 768) {
+                        e.stopPropagation();
+                        const tip = tooltipContainer.querySelector('.tooltip-text');
+                        const isVisible = tip.style.visibility === 'visible';
+                        document.querySelectorAll('.tooltip-text').forEach(t => {
+                            t.style.visibility = '';
+                            t.style.opacity = '';
+                        });
+                        if (!isVisible) {
+                            tip.style.visibility = 'visible';
+                            tip.style.opacity = '1';
+                        }
+                    }
+                });
+            }
+
             // Add click listener to plot chart
             tr.addEventListener('click', () => {
                 renderChart(item);
@@ -88,6 +108,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         table.classList.remove('hidden');
+    }
+
+    // Dismiss any open mobile tooltips when tapping anywhere else
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.tooltip-container')) {
+            document.querySelectorAll('.tooltip-text').forEach(t => {
+                t.style.visibility = '';
+                t.style.opacity = '';
+            });
+        }
+    });
+
+    function getResponsiveChartHeight() {
+        if (window.innerWidth <= 480) return 360;
+        if (window.innerWidth <= 768) return 400;
+        return 560;
     }
 
     const chartSection = document.getElementById('chart-section');
@@ -242,11 +278,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         chartContainer.innerHTML = '';
+        const responsiveH = getResponsiveChartHeight();
+        const chartWrapper = document.getElementById('tv-chart-wrapper');
+        if (chartWrapper) chartWrapper.style.height = `${responsiveH}px`;
 
         // Initialize TradingView Lightweight Chart
         const chart = LightweightCharts.createChart(chartContainer, {
             width: chartContainer.clientWidth,
-            height: 560,
+            height: responsiveH,
             layout: {
                 background: { type: 'solid', color: '#131722' },
                 textColor: '#d1d4dc',
@@ -492,7 +531,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Window Resize Handler
     window.addEventListener('resize', () => {
         if (activeChart && chartContainer) {
-            activeChart.applyOptions({ width: chartContainer.clientWidth });
+            const responsiveH = getResponsiveChartHeight();
+            const chartWrapper = document.getElementById('tv-chart-wrapper');
+            if (chartWrapper) chartWrapper.style.height = `${responsiveH}px`;
+            activeChart.applyOptions({ 
+                width: chartContainer.clientWidth,
+                height: responsiveH
+            });
             drawZoneOverlay();
         }
     });

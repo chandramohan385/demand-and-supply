@@ -95,6 +95,25 @@ h1 {
     backdrop-filter: blur(10px);
 }
 
+.controls-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.mobile-scroll-hint {
+    display: none;
+    text-align: center;
+    margin-bottom: 0.6rem;
+    font-size: 0.78rem;
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.08);
+    border: 1px dashed rgba(96, 165, 250, 0.25);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-weight: 500;
+}
+
 .stats-card {
     display: flex;
     align-items: center;
@@ -581,59 +600,176 @@ h1 {
     font-size: 0.78rem;
 }
 
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
+/* Comprehensive Mobile & Tablet Responsiveness */
+@media (max-width: 900px) {
     .dashboard-container {
-        padding: 1rem;
+        padding: 1.25rem 1rem;
     }
-    
+
+    .controls-section {
+        flex-direction: column;
+        gap: 1.25rem;
+        padding: 1.25rem;
+    }
+
+    .controls-actions {
+        flex-direction: column;
+        width: 100%;
+        gap: 0.75rem;
+    }
+
+    .controls-actions .glow-select,
+    .controls-actions .glow-btn {
+        width: 100%;
+        min-height: 46px;
+    }
+}
+
+@media (max-width: 768px) {
+    header {
+        margin-bottom: 1.5rem;
+    }
+
     h1 {
         font-size: 2rem;
     }
-    
-    .controls-section {
-        flex-direction: column;
-        gap: 1.5rem;
-        padding: 1rem;
+
+    .subtitle {
+        font-size: 0.9rem;
     }
-    
-    .controls-section > div:last-child {
-        flex-direction: column !important;
-        align-items: stretch !important;
-        width: 100%;
+
+    .mobile-scroll-hint {
+        display: block;
     }
-    
-    .glow-select, .glow-btn {
-        width: 100%;
-    }
-    
+
     .table-wrapper {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
-        border-radius: 16px;
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
     }
-    
+
     .glass-table {
-        min-width: 800px; /* Force scroll on small screens */
+        min-width: 760px;
     }
-    
-    .glass-table th, .glass-table td {
-        padding: 0.8rem 1rem;
+
+    /* Pinned Sticky Ticker Column for Mobile Scrolling */
+    .glass-table th:first-child,
+    .glass-table td:first-child {
+        position: sticky;
+        left: 0;
+        background: #0d1117;
+        z-index: 2;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.4);
     }
-    
-    #plotly-chart {
-        height: 400px;
+
+    .glass-table th:first-child {
+        background: #161b22;
+        z-index: 3;
     }
-    
+
+    .glass-table th, 
+    .glass-table td {
+        padding: 0.75rem 0.9rem;
+        font-size: 0.88rem;
+    }
+
+    .glass-table tbody tr:active {
+        background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Mobile TradingView Chart Sizing & Layout */
+    .tv-section {
+        margin-top: 1.25rem;
+        border-radius: 10px;
+    }
+
+    .tv-chart-wrapper {
+        height: 400px !important;
+    }
+
+    .tv-chart-topbar {
+        padding: 10px;
+        gap: 8px;
+    }
+
+    .tv-symbol-row {
+        gap: 6px;
+    }
+
+    .tv-ticker-badge {
+        font-size: 1.1rem;
+    }
+
+    .tv-timeframe-badge,
+    .tv-exchange-badge,
+    .tv-zone-badge,
+    .tv-score-badge {
+        font-size: 0.72rem;
+        padding: 2px 6px;
+    }
+
+    .tv-ohlc-legend {
+        font-size: 0.72rem;
+        gap: 6px;
+    }
+
+    .tv-tool-btn {
+        padding: 6px 9px;
+        font-size: 0.76rem;
+    }
+
+    .tv-chart-statusbar {
+        padding: 6px 10px;
+        font-size: 0.74rem;
+    }
+
+    .tv-status-hint {
+        display: none; /* Hide verbose desktop tips on mobile screens */
+    }
+
+    /* Mobile-friendly Tooltip Positioning */
     .tooltip-container .tooltip-text {
-        right: 0;
-        top: 100%;
-        margin-top: 10px;
+        position: fixed;
+        left: 50% !important;
+        top: auto !important;
+        bottom: 20px !important;
+        right: auto !important;
+        transform: translateX(-50%);
+        width: 260px;
+        z-index: 999;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
-    
+
     .tooltip-container .tooltip-text::after {
-        top: -11px;
-        right: 20px;
-        border-color: transparent transparent var(--glass-border) transparent;
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-container {
+        padding: 0.75rem 0.5rem;
+    }
+
+    h1 {
+        font-size: 1.65rem;
+    }
+
+    .controls-section {
+        padding: 1rem 0.75rem;
+        border-radius: 12px;
+    }
+
+    .tv-chart-wrapper {
+        height: 360px !important;
+    }
+
+    .tv-tool-btn span {
+        display: none; /* Icon-only buttons on very narrow screens */
+    }
+
+    .tv-tool-btn {
+        padding: 6px 8px;
     }
 }
