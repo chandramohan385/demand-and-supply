@@ -218,9 +218,9 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         'Sector Support (2)': sector_score
     }
     
-    # Prepare history for charting
+    # Prepare history for charting (provide 300 candles for rich TradingView navigation)
     df['DateStr'] = df[date_col].dt.strftime('%Y-%m-%d')
-    history = df[['DateStr', 'Open', 'High', 'Low', 'Close', 'EMA_20', 'EMA_50']].tail(100).to_dict(orient='records')
+    history = df[['DateStr', 'Open', 'High', 'Low', 'Close', 'EMA_20', 'EMA_50']].tail(300).to_dict(orient='records')
         
     tf_map = {
         "1d": "Daily (1D)",

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GTF Demand & Supply Scanner</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
     <div class="app-background"></div>
@@ -82,13 +82,56 @@
                 </div>
             </section>
 
-            <!-- Chart Modal/Container -->
-            <section id="chart-section" class="hidden">
-                <div class="chart-header">
-                    <h3 id="chart-title">Symbol Analysis</h3>
-                    <button id="close-chart-btn" class="glow-btn" style="padding: 6px 12px; font-size: 0.9rem;">Close Chart</button>
+            <!-- Professional TradingView Chart Section -->
+            <section id="chart-section" class="hidden tv-section">
+                <div class="tv-chart-topbar">
+                    <div class="tv-chart-info">
+                        <div class="tv-symbol-row">
+                            <span id="tv-ticker" class="tv-ticker-badge">ZEEL</span>
+                            <span id="tv-timeframe" class="tv-timeframe-badge">1M</span>
+                            <span class="tv-exchange-badge">NSE</span>
+                            <span id="tv-zone-badge" class="tv-zone-badge">Demand Zone</span>
+                            <span id="tv-score-badge" class="tv-score-badge">Score: 10/14</span>
+                        </div>
+                        <div id="tv-ohlc-legend" class="tv-ohlc-legend">
+                            <span>O: <b id="tv-open">-</b></span>
+                            <span>H: <b id="tv-high">-</b></span>
+                            <span>L: <b id="tv-low">-</b></span>
+                            <span>C: <b id="tv-close">-</b></span>
+                            <span id="tv-change" class="tv-change-val">-</span>
+                            <span class="tv-ema-tag tv-ema20">EMA 20: <b id="tv-ema20-val">-</b></span>
+                            <span class="tv-ema-tag tv-ema50">EMA 50: <b id="tv-ema50-val">-</b></span>
+                        </div>
+                    </div>
+                    <div class="tv-chart-actions">
+                        <button id="tv-reset-btn" class="tv-tool-btn" title="Reset View (Auto-scale)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+                            <span>Reset Scale</span>
+                        </button>
+                        <button id="tv-download-btn" class="tv-tool-btn tv-save-btn" title="Download Chart Image (PNG)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <span>Save PNG</span>
+                        </button>
+                        <button id="close-chart-btn" class="tv-tool-btn tv-close-btn" title="Close Chart">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
                 </div>
-                <div id="plotly-chart"></div>
+
+                <div id="tv-chart-wrapper" class="tv-chart-wrapper">
+                    <div id="tv-chart-container"></div>
+                    <canvas id="tv-zone-canvas"></canvas>
+                </div>
+                
+                <div class="tv-chart-statusbar">
+                    <div class="tv-status-item">
+                        <span class="tv-dot" style="background:#8b5cf6;"></span>
+                        <span id="tv-zone-details">Base Range: Proximal to Distal</span>
+                    </div>
+                    <div class="tv-status-item">
+                        <span class="tv-status-hint">💡 Tip: Drag right price scale to stretch/squish price. Drag bottom time scale to stretch/squish time. Drag canvas to pan. Mouse wheel to zoom.</span>
+                    </div>
+                </div>
             </section>
         </main>
     </div>
