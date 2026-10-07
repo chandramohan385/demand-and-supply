@@ -178,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const viewStartDate = startIdx !== -1 ? dates[paddingIdx] : dates[dates.length - 60] || dates[0];
 
         const layout = {
-            dragmode: 'pan',
+            dragmode: 'zoom',
             margin: { r: 60, t: 40, b: 40, l: 10 },
             showlegend: true,
             legend: {
