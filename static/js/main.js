@@ -226,10 +226,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const zoneTop = Math.min(yEntry, ySL);
         const zoneHeight = Math.max(2, Math.abs(yEntry - ySL));
 
-        // 1. Draw Institutional GTF Base Zone
-        ctx.fillStyle = isDemand ? 'rgba(168, 85, 247, 0.22)' : 'rgba(236, 72, 153, 0.22)';
+        // 1. Draw Institutional GTF Base Zone (TradeTiger standard: Green for Demand, Red for Supply)
+        ctx.fillStyle = isDemand ? 'rgba(34, 197, 94, 0.20)' : 'rgba(239, 68, 68, 0.20)';
         ctx.fillRect(xStart, zoneTop, boxWidth, zoneHeight);
-        ctx.strokeStyle = isDemand ? 'rgba(168, 85, 247, 0.85)' : 'rgba(236, 72, 153, 0.85)';
+        ctx.strokeStyle = isDemand ? '#22c55e' : '#ef4444';
         ctx.lineWidth = 1.5;
         ctx.strokeRect(xStart, zoneTop, boxWidth, zoneHeight);
 
@@ -237,9 +237,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (yTarget !== null) {
             const targetTop = Math.min(yEntry, yTarget);
             const targetHeight = Math.max(2, Math.abs(yEntry - yTarget));
-            ctx.fillStyle = 'rgba(8, 153, 129, 0.12)';
+            ctx.fillStyle = 'rgba(6, 182, 212, 0.08)';
             ctx.fillRect(xStart, targetTop, boxWidth, targetHeight);
-            ctx.strokeStyle = 'rgba(8, 153, 129, 0.5)';
+            ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 4]);
             ctx.strokeRect(xStart, targetTop, boxWidth, targetHeight);
@@ -248,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 3. Draw Zone Labels
         ctx.fillStyle = '#ffffff';
-        ctx.font = '600 11px Outfit, sans-serif';
+        ctx.font = 'bold 11px Outfit, sans-serif';
         const badgeLabel = `${activeItem.zone_type.toUpperCase()} ZONE (${activeItem.pattern})`;
         ctx.fillText(badgeLabel, xStart + 8, zoneTop + Math.min(18, zoneHeight / 2 + 4));
     }
@@ -417,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Proximal Line
         candleSeries.createPriceLine({
             price: entry,
-            color: isDemand ? '#8b5cf6' : '#ec4899',
+            color: isDemand ? '#22c55e' : '#ef4444',
             lineWidth: 2,
             lineStyle: LightweightCharts.LineStyle.Solid,
             axisLabelVisible: true,
@@ -427,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Distal Line (SL)
         candleSeries.createPriceLine({
             price: sl,
-            color: isDemand ? '#a78bfa' : '#f472b6',
+            color: isDemand ? '#15803d' : '#991b1b',
             lineWidth: 2,
             lineStyle: LightweightCharts.LineStyle.Dashed,
             axisLabelVisible: true,
@@ -437,7 +437,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Target Line (1:2 Target)
         candleSeries.createPriceLine({
             price: target,
-            color: '#10b981',
+            color: '#06b6d4',
             lineWidth: 2,
             lineStyle: LightweightCharts.LineStyle.Dotted,
             axisLabelVisible: true,

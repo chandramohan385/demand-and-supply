@@ -28,13 +28,14 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
     if date_col not in df.columns:
         return None
 
-    # Calculate Candle Attributes based on GTF rules
+    # Calculate Candle Attributes based on GTF institutional rules
     df['Total_Length'] = abs(df['High'] - df['Low'])
     df['Body_Length'] = abs(df['Close'] - df['Open'])
     df['Avg_Length'] = df['Total_Length'].rolling(window=20).mean()
     
-    # An Exciting Candle (ERC) must have a large body (>60% of range) AND not be a microscopic candle
-    df['Is_Exciting'] = (df['Body_Length'] > (df['Total_Length'] * 0.60)) & (df['Total_Length'] > (df['Avg_Length'] * 0.5))
+    # GTF Exciting Candle (ERC): Body >= 55% of range and candle not abnormally tiny
+    df['Is_Exciting'] = (df['Body_Length'] >= (df['Total_Length'] * 0.55)) & (df['Total_Length'] >= (df['Avg_Length'] * 0.5))
+    # GTF Boring Candle (Base): Body <= 50% of range (dojis, spinning tops, narrow bodies)
     df['Is_Base'] = df['Body_Length'] <= (df['Total_Length'] * 0.50)
     
     # EMAs for Trend Confirmation & Score Booster
@@ -42,75 +43,123 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
     df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
     df['EMA_200'] = df['Close'].ewm(span=200, adjust=False).mean()
     
+    current_price = df['Close'].iloc[-1]
     zones = []
     
-    # Reverse loop to find the most recent GTF zone
-    # We start from len(df) - 2 to completely IGNORE the current ongoing/incomplete candle 
-    # (e.g., an incomplete June Monthly candle or an ongoing daily candle)
-    for i in range(len(df) - 2, 6, -1):
+    # Reverse loop to search for the most recent high-probability GTF institutional setup
+    for i in range(len(df) - 2, 8, -1):
+        leg_out_candle = df.iloc[i]
         if not df['Is_Exciting'].iloc[i]:
             continue
             
-        leg_out_candle = df.iloc[i]
-        
-        # Count all consecutive base candles backwards
+        # Count consecutive base candles backwards (Strict GTF: 1 to 3 base candles, max 4)
         base_count = 0
         j = i - 1
-        while j >= 0 and df['Is_Base'].iloc[j]:
+        while j >= 0 and df['Is_Base'].iloc[j] and base_count < 4:
             base_count += 1
             j -= 1
                 
-        # GTF Rule: Max 5 base candles permitted. If more, it's a chop zone, reject it.
-        if base_count == 0 or base_count > 5:
+        # GTF Rule: strictly 1 to 3 base candles (max 4). If 0 or > 4, reject it.
+        if base_count < 1 or base_count > 3:
             continue
             
         # Leg in candle
         leg_in_idx = i - base_count - 1
-        if leg_in_idx < 0 or not df['Is_Exciting'].iloc[leg_in_idx]:
+        if leg_in_idx < 0:
             continue
             
         leg_in_candle = df.iloc[leg_in_idx]
         base_candles = df.iloc[i-base_count:i]
         
-        # Determine direction
-        leg_in_dir = "Rally" if leg_in_candle['Close'] > leg_in_candle['Open'] else "Drop"
-        leg_out_dir = "Rally" if leg_out_candle['Close'] > leg_out_candle['Open'] else "Drop"
+        base_high = base_candles['High'].max()
+        base_low = base_candles['Low'].min()
+        base_body_max = max(base_candles['Open'].max(), base_candles['Close'].max())
+        base_body_min = min(base_candles['Open'].min(), base_candles['Close'].min())
         
+        # GTF Breakout Rule (as seen in TradeTiger):
+        # Rally Leg-out (Demand): candle must be GREEN and decisively CLOSE ABOVE highest high of base!
+        # Drop Leg-out (Supply): candle must be RED and decisively CLOSE BELOW lowest low of base!
+        is_rally_out = (leg_out_candle['Close'] > leg_out_candle['Open']) and (leg_out_candle['Close'] > base_high)
+        is_drop_out = (leg_out_candle['Close'] < leg_out_candle['Open']) and (leg_out_candle['Close'] < base_low)
+        
+        if not (is_rally_out or is_drop_out):
+            continue
+            
+        zone_type = "Demand" if is_rally_out else "Supply"
+        leg_in_dir = "Rally" if leg_in_candle['Close'] > leg_in_candle['Open'] else "Drop"
+        leg_out_dir = "Rally" if is_rally_out else "Drop"
         pattern = f"{leg_in_dir}-Base-{leg_out_dir}"
-        zone_type = "Demand" if leg_out_dir == "Rally" else "Supply"
         
         if zone_type_needed and zone_type != zone_type_needed:
             continue
             
-        # Zone Marking (Proximal & Distal)
+        # Zone Marking (GTF Standard as seen in TradeTiger)
+        # Demand: Proximal = Highest Body of base, Distal = Lowest Wick of base
+        # Supply: Proximal = Lowest Body of base, Distal = Highest Wick of base
         if zone_type == "Demand":
-            proximal = max(base_candles['Open'].max(), base_candles['Close'].max())
-            distal = base_candles['Low'].min()
-        else:
-            proximal = min(base_candles['Open'].min(), base_candles['Close'].min())
-            distal = base_candles['High'].max()
-            
-        # Freshness Check (Count penetrations and violdations)
-        violated = False
-        tested_count = 0
-        subsequent_candles = df.iloc[i+1:]
-        if len(subsequent_candles) > 0:
-            if zone_type == "Demand":
-                if subsequent_candles['Low'].min() < distal:
-                    violated = True
-                else:
-                    # Count distinct candles touching proximal
-                    tested_count = len(subsequent_candles[subsequent_candles['Low'] <= proximal])
-            else:
-                if subsequent_candles['High'].max() > distal:
-                    violated = True
-                else:
-                    tested_count = len(subsequent_candles[subsequent_candles['High'] >= proximal])
-                    
-        if violated or tested_count >= 3:
-            continue # Skip violated zones or zones tested 3+ times
-            
-        # Strength of Zone
+            proximal = round(float(base_body_max), 2)
+            distal = round(float(base_low), 2)
+            risk = proximal - distal
+            if risk <= 0 or (risk / proximal) > 0.12:
+                continue # Disproportionately huge base, invalid trade
+                
+            subsequent = df.iloc[i:]
+            max_after = subsequent['High'].max()
+            departure = max_after - proximal
+            # GTF Departure Rule: Price must have moved away by at least 1.8x risk!
+            if departure < 1.8 * risk:
+                continue
+                
+            # Current Price Viability Rule:
+            # Price must be above distal (not violated) and not collapsed past zone
+            if current_price < distal:
+                continue # Violated!
+            if current_price < (proximal - 0.4 * risk):
+                continue # Already broken down into or past zone
+                
+            # Freshness / Test Count (Look at price action after departure peak)
+            peak_idx = subsequent['High'].idxmax()
+            after_peak = df.loc[peak_idx:]
+            if after_peak['Low'].min() < distal:
+                continue # Distal pierced after peak = invalid
+                
+            # Count distinct touches of proximal
+            tested_count = len(after_peak[after_peak['Low'] <= proximal])
+            if tested_count > 2:
+                continue # 3+ touches is over-tested
+                
+        else: # Supply Zone
+            proximal = round(float(base_body_min), 2)
+            distal = round(float(base_high), 2)
+            risk = distal - proximal
+            if risk <= 0 or (risk / proximal) > 0.12:
+                continue
+                
+            subsequent = df.iloc[i:]
+            min_after = subsequent['Low'].min()
+            departure = proximal - min_after
+            # GTF Departure Rule: Price must have moved away by at least 1.8x risk!
+            if departure < 1.8 * risk:
+                continue
+                
+            # Current Price Viability Rule:
+            # Price must be below distal (not violated) and not blown above zone
+            if current_price > distal:
+                continue # Violated!
+            if current_price > (proximal + 0.4 * risk):
+                continue # Already broken above zone
+                
+            # Freshness / Test Count (Look at price action after departure trough)
+            trough_idx = subsequent['Low'].idxmin()
+            after_trough = df.loc[trough_idx:]
+            if after_trough['High'].max() > distal:
+                continue # Distal pierced after trough = invalid
+                
+            tested_count = len(after_trough[after_trough['High'] >= proximal])
+            if tested_count > 2:
+                continue # Over-tested
+                
+        # Strength of Zone (Immediate post-base momentum)
         next_candle_exciting = False
         if i + 1 < len(df) and df['Is_Exciting'].iloc[i+1]:
             if (zone_type == "Demand" and df['Close'].iloc[i+1] > df['Open'].iloc[i+1]) or \
@@ -140,14 +189,13 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
             'next_candle_exciting': next_candle_exciting,
             'idx': i
         })
-        break # Just get the latest one
+        break # Select the primary active setup
 
     if not zones:
         return None
         
     latest_zone = zones[0]
     score = 0
-    current_price = df['Close'].iloc[-1]
     
     # Score Booster: Trend Confluence
     uptrend = current_price > df['EMA_20'].iloc[-1] and df['EMA_20'].iloc[-1] > df['EMA_50'].iloc[-1]
@@ -159,26 +207,28 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
     elif downtrend:
         trend_status = "Downtrend"
     
-    # 1. Freshness (Max 3)
+    # 1. Freshness (Max 3 pts)
     fresh_score = 0
     if latest_zone['tested_count'] == 0:
         fresh_score = 3
     elif latest_zone['tested_count'] == 1:
         fresh_score = 1
         
-    # 2. Strength of the zone (Max 3)
-    strength_score = 1 # One exciting
+    # 2. Strength of the zone (Max 3 pts)
+    strength_score = 1
     if latest_zone['next_candle_exciting']:
         strength_score = 3
     elif latest_zone['has_gap']:
         strength_score = 2
         
-    # 3. Base Size (Max 3)
+    # 3. Base Size (Max 3 pts - fewer base candles = higher institutional score)
     base_score = 0
-    if latest_zone['base_count'] <= 3:
+    if latest_zone['base_count'] == 1:
         base_score = 3
-    elif latest_zone['base_count'] <= 5:
+    elif latest_zone['base_count'] == 2:
         base_score = 2
+    elif latest_zone['base_count'] == 3:
+        base_score = 1
         
     # 4. Golden / Death Crossover (Max 2)
     crossover_score = 0
