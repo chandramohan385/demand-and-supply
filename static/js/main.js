@@ -179,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const layout = {
             dragmode: 'pan',
-            margin: { r: 10, t: 40, b: 40, l: 60 },
+            margin: { r: 60, t: 40, b: 40, l: 10 },
             showlegend: true,
             legend: {
                 orientation: "h", yanchor: "bottom", y: 1.02, xanchor: "right", x: 1, font: { color: '#8b949e' }
