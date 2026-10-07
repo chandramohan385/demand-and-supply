@@ -347,3 +347,60 @@ h1 {
     width: 100%;
     height: 500px;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .dashboard-container {
+        padding: 1rem;
+    }
+    
+    h1 {
+        font-size: 2rem;
+    }
+    
+    .controls-section {
+        flex-direction: column;
+        gap: 1.5rem;
+        padding: 1rem;
+    }
+    
+    .controls-section > div:last-child {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100%;
+    }
+    
+    .glow-select, .glow-btn {
+        width: 100%;
+    }
+    
+    .table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 16px;
+    }
+    
+    .glass-table {
+        min-width: 800px; /* Force scroll on small screens */
+    }
+    
+    .glass-table th, .glass-table td {
+        padding: 0.8rem 1rem;
+    }
+    
+    #plotly-chart {
+        height: 400px;
+    }
+    
+    .tooltip-container .tooltip-text {
+        right: 0;
+        top: 100%;
+        margin-top: 10px;
+    }
+    
+    .tooltip-container .tooltip-text::after {
+        top: -11px;
+        right: 20px;
+        border-color: transparent transparent var(--glass-border) transparent;
+    }
+}
