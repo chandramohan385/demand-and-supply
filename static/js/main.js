@@ -118,6 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeItem = null;
     let activeTimeframeText = '';
 
+    let activeCandleData = [];
+
     closeChartBtn.addEventListener('click', () => {
         chartSection.classList.add('hidden');
         if (activeChart) {
@@ -146,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function drawZoneOverlay() {
         if (!zoneCanvas || !activeChart || !activeCandleSeries || !activeItem) return;
         const rect = chartContainer.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
         zoneCanvas.width = rect.width;
         zoneCanvas.height = rect.height;
 
@@ -165,10 +168,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (xStart === null) {
             if (visibleRange && activeItem.start_date < visibleRange.from) {
                 xStart = 0; // Starts off-screen to the left
-            } else {
-                return;
+            } else if (activeCandleData.length > 0) {
+                const match = activeCandleData.find(c => c.time >= activeItem.start_date);
+                if (match) {
+                    xStart = timeScale.timeToCoordinate(match.time);
+                }
             }
         }
+        if (xStart === null) xStart = 0;
         xStart = Math.max(0, xStart);
         const xEnd = Math.max(xStart + 10, zoneCanvas.width - 65); // Leave margin for right price scale
         const boxWidth = xEnd - xStart;
@@ -357,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        activeCandleData = candleData;
         candleSeries.setData(candleData);
         ema20Series.setData(ema20Data);
         ema50Series.setData(ema50Data);

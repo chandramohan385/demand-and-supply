@@ -118,9 +118,9 @@
                     </div>
                 </div>
 
-                <div id="tv-chart-wrapper" class="tv-chart-wrapper">
-                    <div id="tv-chart-container"></div>
-                    <canvas id="tv-zone-canvas"></canvas>
+                <div id="tv-chart-wrapper" class="tv-chart-wrapper" style="position: relative; width: 100%; height: 560px; background: #131722; overflow: hidden;">
+                    <div id="tv-chart-container" style="width: 100%; height: 100%;"></div>
+                    <canvas id="tv-zone-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5;"></canvas>
                 </div>
                 
                 <div class="tv-chart-statusbar">
