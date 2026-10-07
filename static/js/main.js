@@ -187,11 +187,20 @@ document.addEventListener('DOMContentLoaded', () => {
             xaxis: {
                 autorange: false, 
                 domain: [0, 1],
-                range: [viewStartDate, futureDate], // Show from before the zone formation + future
-                rangeslider: {visible: false}, type: 'date', gridcolor: 'rgba(255,255,255,0.05)'
+                range: [viewStartDate, futureDate],
+                rangeslider: {visible: false}, type: 'date', gridcolor: 'rgba(255,255,255,0.05)',
+                fixedrange: false
             },
             yaxis: {
-                autorange: true, domain: [0, 1], type: 'linear', gridcolor: 'rgba(255,255,255,0.05)'
+                autorange: false, 
+                domain: [0, 1], 
+                type: 'linear', 
+                gridcolor: 'rgba(255,255,255,0.05)',
+                fixedrange: false,
+                range: [
+                    Math.min(...item.history.map(h => h.Low)) * 0.95,
+                    Math.max(...item.history.map(h => h.High)) * 1.05
+                ]
             },
             plot_bgcolor: '#0a0c10',
             paper_bgcolor: '#0a0c10',
