@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTF Demand & Supply Scanner</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head>
+<body>
+    <div class="app-background"></div>
+    <div class="dashboard-container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <h1><span class="highlight">GTF</span> Scanner</h1>
+            </div>
+            <p class="subtitle">Institutional Demand & Supply Order Block Detector</p>
+        </header>
+
+        <main>
+            <section class="controls-section">
+                <div class="stats-card">
+                    <h3>Market Pulse</h3>
+                    <div class="pulse-indicator online"></div>
+                    <p>Live Data Ready</p>
+                </div>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <select id="timeframe-select" class="glow-select">
+                        <option value="1d">Daily (1D)</option>
+                        <option value="1wk">Weekly (1W)</option>
+                        <option value="1mo">Monthly (1M)</option>
+                        <option value="3mo">Quarterly (3M)</option>
+                    </select>
+                    <button id="scan-btn" class="glow-btn">
+                        <span class="btn-text">Run Market Scan</span>
+                        <span class="btn-glow"></span>
+                    </button>
+                </div>
+            </section>
+
+            <div id="loader" class="loader-container hidden">
+                <div class="spinner"></div>
+                <p>Analyzing price action, calculating base candles, and checking EMA confluence...</p>
+            </div>
+
+            <section class="results-section">
+                <div class="table-wrapper">
+                    <table id="results-table" class="hidden glass-table">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>LTP</th>
+                                <th>Zone Type</th>
+                                <th>Formation</th>
+                                <th>Proximal (Entry)</th>
+                                <th>Distal (SL)</th>
+                                <th>Trend (1D)</th>
+                                <th>GTF Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-body">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Chart Modal/Container -->
+            <section id="chart-section" class="hidden">
+                <div class="chart-header">
+                    <h3 id="chart-title">Symbol Analysis</h3>
+                    <button id="close-chart-btn" class="glow-btn" style="padding: 6px 12px; font-size: 0.9rem;">Close Chart</button>
+                </div>
+                <div id="plotly-chart"></div>
+            </section>
+        </main>
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
