@@ -1,18 +1,28 @@
+import os
+import json
 from flask import Flask, render_template, jsonify, request
 from core.scanner import scan_tickers
 
 app = Flask(__name__)
 
-# Representative list of highly liquid Indian stocks (NIFTY 50 examples)
+# Official and Representative lists of Indian stocks
 STOCK_LISTS = {
     "NIFTY_50": [
-        "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", 
-        "SBIN", "BHARTIARTL", "ITC", "LT", "BAJFINANCE", 
-        "TATASTEEL", "M&M", "MARUTI", "SUNPHARMA", "KOTAKBANK"
+        "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT", "AXISBANK", 
+        "BSE", "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV", "BEL", 
+        "BHARTIARTL", "CIPLA", "COALINDIA", "DRREDDY", "EICHERMOT", 
+        "ETERNAL", "GRASIM", "HCLTECH", "HDFCBANK", "HDFCLIFE", 
+        "HINDALCO", "HINDUNILVR", "ICICIBANK", "ITC", "INFY", 
+        "INDIGO", "JSWSTEEL", "JIOFIN", "KOTAKBANK", "LT", 
+        "M&M", "MARUTI", "MAXHEALTH", "NTPC", "NESTLEIND", 
+        "ONGC", "POWERGRID", "RELIANCE", "SBILIFE", "SHRIRAMFIN", 
+        "SBIN", "SUNPHARMA", "TCS", "TATACONSUM", "TMPV", 
+        "TATASTEEL", "TECHM", "TITAN", "TRENT", "ULTRACEMCO"
     ],
     "BANK_NIFTY": [
         "HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", 
-        "INDUSINDBK", "PNB", "BANKBARODA", "FEDERALBNK", "IDFCFIRSTB"
+        "INDUSINDBK", "PNB", "BANKBARODA", "FEDERALBNK", "IDFCFIRSTB",
+        "AUBANK", "BANDHANBNK"
     ],
     "NIFTY_IT": [
         "TCS", "INFY", "HCLTECH", "WIPRO", "TECHM", 
@@ -20,15 +30,15 @@ STOCK_LISTS = {
     ],
     "NIFTY_AUTO": [
         "M&M", "MARUTI", "TATAMOTORS", "BAJAJ-AUTO", "HEROMOTOCO",
-        "EICHERMOT", "TVSMOTOR", "ASHOKLEY", "BOSCHLTD"
+        "EICHERMOT", "TVSMOTOR", "ASHOKLEY", "BOSCHLTD", "TIINDIA", "BHARATFORG"
     ],
     "NIFTY_PHARMA": [
         "SUNPHARMA", "DRREDDY", "CIPLA", "DIVISLAB", "LUPIN",
-        "AUROPHARMA", "TORNTPHARM", "ZYDUSLIFE", "BIOCON"
+        "AUROPHARMA", "TORNTPHARM", "ZYDUSLIFE", "BIOCON", "MANKIND"
     ],
     "NIFTY_METAL": [
         "TATASTEEL", "HINDALCO", "JSWSTEEL", "COALINDIA", "VEDL",
-        "SAIL", "NMDC", "NATIONALUM"
+        "SAIL", "NMDC", "NATIONALUM", "JINDALSTEL"
     ],
     "NIFTY_REALTY": [
         "DLF", "MACROTECH", "GODREJPROP", "PRESTIGE", "PHOENIXLTD", 
@@ -36,7 +46,7 @@ STOCK_LISTS = {
     ],
     "NIFTY_FMCG": [
         "ITC", "HINDUNILVR", "NESTLEIND", "BRITANNIA", "TATACONSUM", 
-        "GODREJCP", "DABUR", "MARICO", "COLPAL", "UBL"
+        "GODREJCP", "DABUR", "MARICO", "COLPAL", "UBL", "VBL"
     ],
     "NIFTY_PSU_BANK": [
         "SBIN", "PNB", "BANKBARODA", "CANBK", "UNIONBANK", 
@@ -46,21 +56,29 @@ STOCK_LISTS = {
         "RELIANCE", "ONGC", "IOC", "BPCL", "GAIL", 
         "HINDPETRO", "PETRONET", "IGL", "ATGL", "MGL"
     ],
-    "NIFTY_500": [
-        "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
-        "ITC", "LT", "BAJFINANCE", "TATASTEEL", "M&M", "MARUTI", "SUNPHARMA",
-        "ADANIENT", "ASIANPAINT", "TITAN", "HAL", "ZOMATO", "TRENT"
-    ],
-    "NIFTY_SMALLCAP_100": [
-        "SUZLON", "BSE", "CDSL", "MCX", "ANGELONE", 
-        "CYIENT", "RADICO", "KEI", "SONACOMS", "CAMS",
-        "APARINDS", "KAYNES", "TEJASNET", "CHALET", "PVRINOX"
-    ],
+    "NIFTY_500": [], # Populated dynamically from core/stock_lists.json
+    "NIFTY_SMALLCAP_100": [], # Populated dynamically from core/stock_lists.json
     "NIFTY_MEDIA": [
         "ZEEL", "SUNTV", "NETWORK18", "TV18BRDCST", "PVRINOX", 
         "SAREGAMA", "HATHWAY", "DISHTV", "NDTV"
     ]
 }
+
+# Dynamically load complete lists from core/stock_lists.json
+stock_lists_file = os.path.join(os.path.dirname(__file__), 'core', 'stock_lists.json')
+if os.path.exists(stock_lists_file):
+    try:
+        with open(stock_lists_file, 'r') as f:
+            full_lists = json.load(f)
+            if 'NIFTY_50' in full_lists and len(full_lists['NIFTY_50']) == 50:
+                STOCK_LISTS['NIFTY_50'] = full_lists['NIFTY_50']
+            if 'NIFTY_500' in full_lists:
+                STOCK_LISTS['NIFTY_500'] = full_lists['NIFTY_500']
+            if 'NIFTY_SMALLCAP_100' in full_lists:
+                STOCK_LISTS['NIFTY_SMALLCAP_100'] = full_lists['NIFTY_SMALLCAP_100']
+    except Exception as e:
+        print(f"Error loading full stock lists: {e}")
+
 
 SECTOR_MAP = {
     # NIFTY 50 Base

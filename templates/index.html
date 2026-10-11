@@ -28,7 +28,8 @@
                 </div>
                 <div class="controls-actions">
                     <select id="category-select" class="glow-select">
-                        <option value="NIFTY_50">Nifty 50 (Top 15)</option>
+                        <option value="NIFTY_50">Nifty 50 (Full Index - 50 Stocks)</option>
+                        <option value="NIFTY_500">Nifty 500 (Full Index - 500 Stocks)</option>
                         <option value="BANK_NIFTY">Bank Nifty</option>
                         <option value="NIFTY_IT">Nifty IT</option>
                         <option value="NIFTY_AUTO">Nifty Auto</option>
@@ -39,8 +40,7 @@
                         <option value="NIFTY_PSU_BANK">PSU Banks</option>
                         <option value="NIFTY_OIL_GAS">Oil & Gas</option>
                         <option value="NIFTY_MEDIA">Nifty Media</option>
-                        <option value="NIFTY_500">Nifty 500 (Mid/Large Mix)</option>
-                        <option value="NIFTY_SMALLCAP_100">Nifty Smallcap 100 (Top 15)</option>
+                        <option value="NIFTY_SMALLCAP_100">Nifty Smallcap 100</option>
                     </select>
                     <select id="timeframe-select" class="glow-select">
                         <option value="1d">Daily (1D)</option>
@@ -57,7 +57,7 @@
 
             <div id="loader" class="loader-container hidden">
                 <div class="spinner"></div>
-                <p>Analyzing price action, calculating base candles, and checking EMA confluence...</p>
+                <p id="loader-status">Scanning index stocks, calculating base candles, and sorting from best to worst...</p>
             </div>
 
             <section class="results-section">
@@ -68,13 +68,15 @@
                     <table id="results-table" class="hidden glass-table">
                         <thead>
                             <tr>
+                                <th class="rank-th">Rank</th>
                                 <th>Ticker</th>
                                 <th>LTP</th>
                                 <th>Zone Type</th>
                                 <th>Formation</th>
                                 <th>Proximal (Entry)</th>
                                 <th>Distal (SL)</th>
-                                <th>Trend (1D)</th>
+                                <th>Distance to Entry</th>
+                                <th>Trend</th>
                                 <th>GTF Score</th>
                             </tr>
                         </thead>

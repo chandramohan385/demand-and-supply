@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         globalData = data;
         
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No high-probability setups found right now.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem;">No high-probability setups found right now.</td></tr>';
             table.classList.remove('hidden');
             return;
         }
@@ -49,25 +49,67 @@ document.addEventListener('DOMContentLoaded', () => {
         data.forEach((item, index) => {
             const tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
-            // Stagger animation delay
-            tr.style.animation = `fadeInUp 0.3s ease-out ${index * 0.1}s forwards`;
-            tr.style.opacity = '0'; // Start invisible
+            // Stagger animation delay, capping max delay for 500 rows
+            const animDelay = Math.min(index * 0.03, 0.8);
+            tr.style.animation = `fadeInUp 0.3s ease-out ${animDelay}s forwards`;
+            tr.style.opacity = '0';
             
             const zoneClass = item.zone_type === 'Demand' ? 'zone-demand' : 'zone-supply';
+            const itemRank = item.rank || (index + 1);
+
+            // Rank Badge Display
+            let rankBadge = `<span class="rank-badge rank-other">#${itemRank}</span>`;
+            if (itemRank === 1) {
+                rankBadge = `<span class="rank-badge rank-gold" title="Best Overall Institutional Setup">🥇 #1</span>`;
+            } else if (itemRank === 2) {
+                rankBadge = `<span class="rank-badge rank-silver" title="Rank 2 Setup">🥈 #2</span>`;
+            } else if (itemRank === 3) {
+                rankBadge = `<span class="rank-badge rank-bronze" title="Rank 3 Setup">🥉 #3</span>`;
+            } else if (itemRank <= 10) {
+                rankBadge = `<span class="rank-badge rank-top">#${itemRank}</span>`;
+            }
+
+            // Score Class & Quality Tier Tag
+            let scoreClass = 'score-low';
+            let scoreTierLabel = 'Weak';
+            if (item.score >= 11) {
+                scoreClass = 'score-elite';
+                scoreTierLabel = 'Elite';
+            } else if (item.score >= 8) {
+                scoreClass = 'score-high';
+                scoreTierLabel = 'Strong';
+            } else if (item.score >= 6) {
+                scoreClass = 'score-mid';
+                scoreTierLabel = 'Moderate';
+            }
+
+            // Distance to Entry Badge
+            const distPct = item.dist_to_entry_pct !== undefined 
+                ? item.dist_to_entry_pct 
+                : Math.abs(item.current_price - item.proximal) / item.proximal * 100;
             
+            let distBadge = `<span class="dist-badge dist-near">${distPct.toFixed(1)}% away</span>`;
+            if (distPct <= 2.0) {
+                distBadge = `<span class="dist-badge dist-hot" title="At/Near Entry Point">🔥 ${distPct.toFixed(1)}% (Ready)</span>`;
+            } else if (distPct > 10.0) {
+                distBadge = `<span class="dist-badge dist-far">${distPct.toFixed(1)}% away</span>`;
+            }
+
             tr.innerHTML = `
+                <td class="rank-cell">${rankBadge}</td>
                 <td class="ticker-name">${item.ticker}</td>
                 <td>₹${item.current_price.toFixed(2)}</td>
                 <td class="${zoneClass}">${item.zone_type}</td>
                 <td><span class="badge">${item.pattern}</span></td>
                 <td>₹${item.proximal.toFixed(2)}</td>
                 <td>₹${item.distal.toFixed(2)}</td>
+                <td>${distBadge}</td>
                 <td style="font-size: 0.9rem; font-weight: bold; color: ${item.trend === 'Uptrend' ? '#2ea043' : item.trend === 'Downtrend' ? '#da3633' : '#8b949e'};">${item.trend}</td>
-                <td class="score-high">
+                <td class="${scoreClass}">
                     <div class="tooltip-container">
-                        ${item.score}/14
+                        ${item.score}/14 <span class="score-tier-tag">${scoreTierLabel}</span>
                         <div class="tooltip-text">
-                            <div style="border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px; padding-bottom: 5px; text-align: center; font-weight: bold;">Score Breakdown</div>
+                            <div style="border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px; padding-bottom: 5px; text-align: center; font-weight: bold;">Score Breakdown (Rank #${itemRank})</div>
                             <div class="tooltip-row"><span>Freshness:</span> <span>+${item.score_breakdown['Freshness (3)']}</span></div>
                             <div class="tooltip-row"><span>Strength:</span> <span>+${item.score_breakdown['Strength (3)']}</span></div>
                             <div class="tooltip-row"><span>Base Size:</span> <span>+${item.score_breakdown['Base Size (3)']}</span></div>

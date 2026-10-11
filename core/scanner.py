@@ -19,6 +19,52 @@ def fetch_data(ticker, interval="1d", period="1y"):
         print(f"Error fetching data for {ticker}: {e}")
         return None
 
+def fetch_batch_data(tickers, interval="1d", period="2y"):
+    if not tickers:
+        return {}
+    
+    sym_map = {}
+    tickers_ns = []
+    for t in tickers:
+        t_clean = t.strip()
+        t_ns = f"{t_clean}.NS" if not t_clean.endswith('.NS') and not t_clean.startswith('^') else t_clean
+        sym_map[t_ns] = t_clean
+        tickers_ns.append(t_ns)
+
+    if len(tickers_ns) == 1:
+        df = fetch_data(tickers[0], interval=interval, period=period)
+        return {tickers[0]: df} if df is not None else {}
+
+    res_dict = {}
+    chunk_size = 100
+    for i in range(0, len(tickers_ns), chunk_size):
+        chunk = tickers_ns[i:i + chunk_size]
+        try:
+            batch_df = yf.download(chunk, period=period, interval=interval, group_by='ticker', progress=False, threads=True)
+            if batch_df.empty:
+                continue
+            for t_ns in chunk:
+                raw_sym = sym_map.get(t_ns, t_ns)
+                try:
+                    if isinstance(batch_df.columns, pd.MultiIndex):
+                        if t_ns in batch_df.columns.levels[0]:
+                            sub = batch_df[t_ns].dropna(how='all').copy()
+                            if not sub.empty and len(sub) >= 20:
+                                if isinstance(sub.columns, pd.MultiIndex):
+                                    sub.columns = sub.columns.get_level_values(0)
+                                sub = sub.reset_index()
+                                res_dict[raw_sym] = sub
+                    else:
+                        df = batch_df.reset_index()
+                        res_dict[raw_sym] = df
+                except Exception:
+                    continue
+        except Exception as e:
+            print(f"Error fetching batch chunk: {e}")
+            continue
+
+    return res_dict
+
 def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, sector_downtrend=False):
     if df is None or len(df) < 30:
         return None
@@ -235,15 +281,11 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         pattern = f"{leg_in_dir}-Base-{leg_out_dir}"
 
         # Ranking score (to ensure we pick zones near CMP and timeline priority):
-        # 1. Proximity score: closer to CMP is better (max 40 pts)
         proximity_score = max(0, 40 - abs(dist_pct) * 200)
-        # 2. Recency score: fewer bars ago is better (max 30 pts)
         recency_score = max(0, 30 - bars_ago)
-        # 3. Trend alignment bonus (20 pts)
         trend_score = 0
         if uptrend and zone_type == "Demand": trend_score = 20
         elif downtrend and zone_type == "Supply": trend_score = 20
-        # 4. Departure ratio bonus (10 pts)
         dep_ratio = departure / risk
         dep_bonus = min(10, dep_ratio * 2)
 
@@ -351,12 +393,16 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         "3mo": "Quarterly (3M)"
     }
 
+    prox_val = round(float(latest_zone['proximal']), 2)
+    dist_to_entry = round(abs(current_price - prox_val) / prox_val * 100, 2) if prox_val > 0 else 0.0
+
     return {
         'current_price': float(current_price),
         'zone_type': latest_zone['zone_type'],
         'pattern': latest_zone['pattern'],
-        'proximal': round(float(latest_zone['proximal']), 2),
+        'proximal': prox_val,
         'distal': round(float(latest_zone['distal']), 2),
+        'dist_to_entry_pct': dist_to_entry,
         'score': score,
         'score_breakdown': score_breakdown,
         'trend': trend_status,
@@ -383,53 +429,90 @@ def scan_tickers(tickers, interval="1d", sector_map=None):
         "3mo": None
     }
         
-    results = []
+    # Parallel batch download of all candidate tickers
+    data_dict = fetch_batch_data(tickers, interval=interval, period=period)
+    
+    # Pre-fetch sector trend confluence
+    sector_trends = {}
+    if sector_map:
+        needed_sectors = list(set([sector_map[t] for t in tickers if t in sector_map]))
+        if needed_sectors:
+            sec_dict = fetch_batch_data(needed_sectors, interval=interval, period="1y")
+            for sec_idx, sec_df in sec_dict.items():
+                if sec_df is not None and len(sec_df) >= 30:
+                    s_ema20 = sec_df['Close'].ewm(span=20, adjust=False).mean().iloc[-1]
+                    s_ema50 = sec_df['Close'].ewm(span=50, adjust=False).mean().iloc[-1]
+                    s_price = sec_df['Close'].iloc[-1]
+                    sector_trends[sec_idx] = {
+                        'up': bool(s_price > s_ema20 and s_ema20 > s_ema50),
+                        'down': bool(s_price < s_ema20 and s_ema20 < s_ema50)
+                    }
+
+    candidates = []
     for t in tickers:
-        df = fetch_data(t, interval, period)
-        if df is None:
+        df = data_dict.get(t)
+        if df is None or len(df) < 30:
             continue
             
-        # Fetch Sector Data
-        sector_up = False
-        sector_down = False
-        if sector_map and t in sector_map:
-            sector_idx = sector_map[t]
-            sector_df = fetch_data(sector_idx, interval, "1y")
-            if sector_df is not None and len(sector_df) >= 30:
-                s_ema20 = sector_df['Close'].ewm(span=20, adjust=False).mean().iloc[-1]
-                s_ema50 = sector_df['Close'].ewm(span=50, adjust=False).mean().iloc[-1]
-                s_price = sector_df['Close'].iloc[-1]
-                sector_up = s_price > s_ema20 and s_ema20 > s_ema50
-                sector_down = s_price < s_ema20 and s_ema20 < s_ema50
-        
-        analysis = analyze_gtf(df, interval, sector_uptrend=sector_up, sector_downtrend=sector_down)
-        
+        sec_up = False
+        sec_down = False
+        if sector_map and t in sector_map and sector_map[t] in sector_trends:
+            sec_up = sector_trends[sector_map[t]]['up']
+            sec_down = sector_trends[sector_map[t]]['down']
+            
+        analysis = analyze_gtf(df, interval, sector_uptrend=sec_up, sector_downtrend=sec_down)
         if analysis:
-            # Curve Analysis: Check if it hits opposing Higher Time Frame (HTF) zone
-            htf_info = htf_map.get(interval)
-            if htf_info:
-                htf_interval, htf_period = htf_info
-                htf_df = fetch_data(t, htf_interval, htf_period)
-                
-                opposing_type = "Supply" if analysis['zone_type'] == "Demand" else "Demand"
-                htf_opposing_analysis = analyze_gtf(htf_df, htf_interval, zone_type_needed=opposing_type)
-                
-                if htf_opposing_analysis:
-                    current_price = analysis['current_price']
-                    htf_proximal = htf_opposing_analysis['proximal']
-                    
-                    if opposing_type == "Supply":
-                        # If finding a Demand zone, check we are not hitting HTF Supply
-                        if current_price >= htf_proximal:
-                            continue # Hit HTF Supply! Discard trade.
-                    else:
-                        # If finding a Supply zone, check we are not hitting HTF Demand
-                        if current_price <= htf_proximal:
-                            continue # Hit HTF Demand! Discard trade.
-
             analysis['ticker'] = t
-            results.append(analysis)
-    
-    # Sort by score (highest first)
-    results = sorted(results, key=lambda x: x['score'], reverse=True)
-    return results
+            cmp = analysis['current_price']
+            prox = analysis['proximal']
+            dist_pct = abs(cmp - prox) / prox * 100 if prox > 0 else 0
+            analysis['dist_to_entry_pct'] = round(dist_pct, 2)
+            candidates.append(analysis)
+
+    # Batch HTF Curve check on candidates only
+    htf_info = htf_map.get(interval)
+    final_results = []
+    if htf_info and candidates:
+        htf_interval, htf_period = htf_info
+        cand_tickers = [c['ticker'] for c in candidates]
+        htf_dict = fetch_batch_data(cand_tickers, interval=htf_interval, period=htf_period)
+        
+        for c in candidates:
+            t = c['ticker']
+            htf_df = htf_dict.get(t)
+            if htf_df is not None and len(htf_df) >= 30:
+                opposing_type = "Supply" if c['zone_type'] == "Demand" else "Demand"
+                htf_opposing = analyze_gtf(htf_df, htf_interval, zone_type_needed=opposing_type)
+                if htf_opposing:
+                    current_price = c['current_price']
+                    htf_proximal = htf_opposing['proximal']
+                    if opposing_type == "Supply" and current_price >= htf_proximal:
+                        continue # Hit HTF Supply! Discard trade.
+                    elif opposing_type == "Demand" and current_price <= htf_proximal:
+                        continue # Hit HTF Demand! Discard trade.
+            final_results.append(c)
+    else:
+        final_results = candidates
+
+    # Sort strictly from BEST to WORST:
+    # 1. Primary: Score descending (14 down to 0)
+    # 2. Secondary: Trend alignment (Uptrend for Demand, Downtrend for Supply)
+    # 3. Tertiary: Distance to entry ascending (closer to entry is more actionable)
+    # 4. Quaternary: Freshness (Fresh 0-test first)
+    # 5. Base size (tight 1-candle base first)
+    def rank_key(x):
+        score = x.get('score', 0)
+        dist = x.get('dist_to_entry_pct', 999.0)
+        freshness = x.get('score_breakdown', {}).get('Freshness (3)', 0)
+        base_size = x.get('score_breakdown', {}).get('Base Size (3)', 0)
+        trend_align = 1 if (x.get('zone_type') == 'Demand' and x.get('trend') == 'Uptrend') or \
+                           (x.get('zone_type') == 'Supply' and x.get('trend') == 'Downtrend') else 0
+        return (-score, -trend_align, dist, -freshness, -base_size)
+
+    final_results = sorted(final_results, key=rank_key)
+
+    # Assign explicit 1-based ranks
+    for rank, item in enumerate(final_results, start=1):
+        item['rank'] = rank
+
+    return final_results
