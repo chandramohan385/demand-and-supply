@@ -1,24 +1,55 @@
 document.addEventListener('DOMContentLoaded', () => {
     const scanBtn = document.getElementById('scan-btn');
+    const lazyScanBtn = document.getElementById('lazy-scan-btn');
+    const categorySelect = document.getElementById('category-select');
+    const timeframeSelect = document.getElementById('timeframe-select');
     const loader = document.getElementById('loader');
+    const loaderStatus = document.getElementById('loader-status');
     const table = document.getElementById('results-table');
     const tbody = document.getElementById('results-body');
 
-    scanBtn.addEventListener('click', async () => {
+    // Hero Spotlight Card Elements
+    const bestestHeroCard = document.getElementById('bestest-hero-card');
+    const bestestTicker = document.getElementById('bestest-ticker');
+    const bestestPrice = document.getElementById('bestest-price');
+    const bestestEntry = document.getElementById('bestest-entry');
+    const bestestSl = document.getElementById('bestest-sl');
+    const bestestTarget = document.getElementById('bestest-target');
+    const bestestDist = document.getElementById('bestest-dist');
+    const bestestScoreBadge = document.getElementById('bestest-score-badge');
+    const bestestZoneBadge = document.getElementById('bestest-zone-badge');
+    const bestestRationaleText = document.getElementById('bestest-rationale-text');
+    const bestestChartBtn = document.getElementById('bestest-chart-btn');
+
+    async function executeScan(category) {
+        const interval = timeframeSelect.value;
+        const isTotal = category === 'TOTAL_MARKET';
+
         // UI Updates
         scanBtn.disabled = true;
+        if (lazyScanBtn) lazyScanBtn.disabled = true;
         scanBtn.querySelector('.btn-text').innerText = 'Scanning...';
+        if (lazyScanBtn) lazyScanBtn.querySelector('.btn-text').innerText = 'Scanning All Stocks...';
+
+        if (loaderStatus) {
+            loaderStatus.innerText = isTotal 
+                ? '🐢 Scanning the entire stock market (500 Stocks)... Isolating only the perfect setups to reveal the Best of the Bestest...'
+                : 'Scanning index stocks, calculating base candles, and sorting from best to worst...';
+        }
+
         loader.classList.remove('hidden');
         table.classList.add('hidden');
+        if (bestestHeroCard) bestestHeroCard.classList.add('hidden');
         tbody.innerHTML = '';
 
-        const interval = document.getElementById('timeframe-select').value;
-        const category = document.getElementById('category-select').value;
         try {
             const response = await fetch(`/api/scan?interval=${interval}&category=${category}`);
             const result = await response.json();
 
             if (result.status === 'success') {
+                if (result.best_pick && bestestHeroCard) {
+                    renderBestestHeroCard(result.best_pick);
+                }
                 populateTable(result.data);
             } else {
                 alert('Error scanning stocks: ' + result.message);
@@ -29,10 +60,45 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             // UI Reset
             scanBtn.disabled = false;
+            if (lazyScanBtn) lazyScanBtn.disabled = false;
             scanBtn.querySelector('.btn-text').innerText = 'Run Market Scan';
+            if (lazyScanBtn) lazyScanBtn.querySelector('.btn-text').innerText = '👑 Best of Bestest (Lazy Mode)';
             loader.classList.add('hidden');
         }
+    }
+
+    scanBtn.addEventListener('click', () => {
+        executeScan(categorySelect.value);
     });
+
+    if (lazyScanBtn) {
+        lazyScanBtn.addEventListener('click', () => {
+            categorySelect.value = 'TOTAL_MARKET';
+            executeScan('TOTAL_MARKET');
+        });
+    }
+
+    function renderBestestHeroCard(best) {
+        bestestTicker.textContent = best.ticker;
+        bestestPrice.textContent = `₹${best.current_price.toFixed(2)}`;
+        bestestEntry.textContent = `₹${best.proximal.toFixed(2)}`;
+        bestestSl.textContent = `₹${best.distal.toFixed(2)}`;
+        bestestTarget.textContent = `₹${(best.target || best.proximal).toFixed(2)}`;
+        bestestDist.textContent = `🔥 ${best.dist_to_entry_pct.toFixed(1)}% away (Ready)`;
+
+        bestestScoreBadge.textContent = `${best.score}/14 ELITE`;
+        bestestZoneBadge.textContent = `${best.zone_type} Zone (${best.pattern})`;
+        bestestZoneBadge.className = `bestest-zone-pill ${best.zone_type === 'Demand' ? 'zone-demand' : 'zone-supply'}`;
+
+        bestestRationaleText.textContent = best.rationale || `Rank #1 Institutional Pick across 500 stocks with 0 tests and pristine momentum departure.`;
+
+        bestestChartBtn.onclick = (e) => {
+            e.preventDefault();
+            renderChart(best);
+        };
+
+        bestestHeroCard.classList.remove('hidden');
+    }
 
     // Global variable to store raw data for charting
     let globalData = [];
@@ -41,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         globalData = data;
         
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 2rem;">No high-probability setups found right now.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 2rem;">No high-probability setups found right now.</td></tr>';
             table.classList.remove('hidden');
             return;
         }
@@ -67,6 +133,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 rankBadge = `<span class="rank-badge rank-bronze" title="Rank 3 Setup">🥉 #3</span>`;
             } else if (itemRank <= 10) {
                 rankBadge = `<span class="rank-badge rank-top">#${itemRank}</span>`;
+            }
+
+            // Separate Column: Trade Verdict Pill
+            let verdictBadge = `<span class="verdict-pill verdict-elite">⭐ ELITE TRADE</span>`;
+            if (itemRank === 1) {
+                verdictBadge = `<span class="verdict-pill verdict-bestest">👑 BEST OF BESTEST</span>`;
+            } else if (itemRank <= 3) {
+                verdictBadge = `<span class="verdict-pill verdict-perfect">💎 PERFECT SETUP</span>`;
             }
 
             // Score Class & Quality Tier Tag
@@ -98,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tr.innerHTML = `
                 <td class="rank-cell">${rankBadge}</td>
                 <td class="ticker-name">${item.ticker}</td>
+                <td>${verdictBadge}</td>
                 <td>₹${item.current_price.toFixed(2)}</td>
                 <td class="${zoneClass}">${item.zone_type}</td>
                 <td><span class="badge">${item.pattern}</span></td>

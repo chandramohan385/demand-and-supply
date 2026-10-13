@@ -57,6 +57,7 @@ STOCK_LISTS = {
         "HINDPETRO", "PETRONET", "IGL", "ATGL", "MGL"
     ],
     "NIFTY_500": [], # Populated dynamically from core/stock_lists.json
+    "TOTAL_MARKET": [], # Full stock market for Lazy Trader Best of Bestest
     "NIFTY_SMALLCAP_100": [], # Populated dynamically from core/stock_lists.json
     "NIFTY_MEDIA": [
         "ZEEL", "SUNTV", "NETWORK18", "TV18BRDCST", "PVRINOX", 
@@ -74,6 +75,7 @@ if os.path.exists(stock_lists_file):
                 STOCK_LISTS['NIFTY_50'] = full_lists['NIFTY_50']
             if 'NIFTY_500' in full_lists:
                 STOCK_LISTS['NIFTY_500'] = full_lists['NIFTY_500']
+                STOCK_LISTS['TOTAL_MARKET'] = full_lists['NIFTY_500']
             if 'NIFTY_SMALLCAP_100' in full_lists:
                 STOCK_LISTS['NIFTY_SMALLCAP_100'] = full_lists['NIFTY_SMALLCAP_100']
     except Exception as e:
@@ -146,11 +148,13 @@ def index():
 @app.route('/api/scan')
 def api_scan():
     interval = request.args.get('interval', '1d')
-    category = request.args.get('category', 'NIFTY_50')
-    tickers = STOCK_LISTS.get(category, STOCK_LISTS['NIFTY_50'])
+    category = request.args.get('category', 'TOTAL_MARKET')
+    is_total_market = (category == 'TOTAL_MARKET')
+    tickers = STOCK_LISTS.get(category, STOCK_LISTS.get('TOTAL_MARKET', STOCK_LISTS['NIFTY_50']))
     try:
-        results = scan_tickers(tickers, interval=interval, sector_map=SECTOR_MAP)
-        return jsonify({'status': 'success', 'data': results})
+        results = scan_tickers(tickers, interval=interval, sector_map=SECTOR_MAP, is_total_market=is_total_market)
+        best_pick = results[0] if results else None
+        return jsonify({'status': 'success', 'data': results, 'best_pick': best_pick})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 

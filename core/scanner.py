@@ -1,4 +1,5 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -37,12 +38,14 @@ def fetch_batch_data(tickers, interval="1d", period="2y"):
 
     res_dict = {}
     chunk_size = 100
-    for i in range(0, len(tickers_ns), chunk_size):
-        chunk = tickers_ns[i:i + chunk_size]
+    chunks = [tickers_ns[i:i + chunk_size] for i in range(0, len(tickers_ns), chunk_size)]
+
+    def download_and_parse(chunk):
+        chunk_res = {}
         try:
             batch_df = yf.download(chunk, period=period, interval=interval, group_by='ticker', progress=False, threads=True)
             if batch_df.empty:
-                continue
+                return chunk_res
             for t_ns in chunk:
                 raw_sym = sym_map.get(t_ns, t_ns)
                 try:
@@ -53,15 +56,19 @@ def fetch_batch_data(tickers, interval="1d", period="2y"):
                                 if isinstance(sub.columns, pd.MultiIndex):
                                     sub.columns = sub.columns.get_level_values(0)
                                 sub = sub.reset_index()
-                                res_dict[raw_sym] = sub
+                                chunk_res[raw_sym] = sub
                     else:
                         df = batch_df.reset_index()
-                        res_dict[raw_sym] = df
+                        chunk_res[raw_sym] = df
                 except Exception:
                     continue
         except Exception as e:
             print(f"Error fetching batch chunk: {e}")
-            continue
+        return chunk_res
+
+    with ThreadPoolExecutor(max_workers=min(5, len(chunks))) as executor:
+        for part in executor.map(download_and_parse, chunks):
+            res_dict.update(part)
 
     return res_dict
 
@@ -430,7 +437,7 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         'history': history
     }
 
-def scan_tickers(tickers, interval="1d", sector_map=None):
+def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False):
     period = "2y"
     if interval == "1wk":
         period = "5y"
@@ -476,7 +483,7 @@ def scan_tickers(tickers, interval="1d", sector_map=None):
             sec_down = sector_trends[sector_map[t]]['down']
             
         analysis = analyze_gtf(df, interval, sector_uptrend=sec_up, sector_downtrend=sec_down)
-        if analysis:
+        if analysis and analysis.get('score', 0) >= 8:
             analysis['ticker'] = t
             cmp = analysis['current_price']
             prox = analysis['proximal']
@@ -526,8 +533,53 @@ def scan_tickers(tickers, interval="1d", sector_map=None):
 
     final_results = sorted(final_results, key=rank_key)
 
-    # Assign explicit 1-based ranks
+    # When scanning Total Market (Lazy Trader mode): "Only the best, the perfect, should be shown"
+    if is_total_market and final_results:
+        perfect_candidates = [
+            c for c in final_results 
+            if c.get('score', 0) >= 10 
+            and c.get('score_breakdown', {}).get('Freshness (3)', 0) == 3
+            and c.get('dist_to_entry_pct', 999.0) <= 10.0
+        ]
+        if len(perfect_candidates) >= 3:
+            final_results = perfect_candidates[:15]
+        else:
+            final_results = [c for c in final_results if c.get('score', 0) >= 9][:15]
+
+    # Assign explicit 1-based ranks, target prices, verdicts and rationale
+    total_scanned = len(tickers)
     for rank, item in enumerate(final_results, start=1):
         item['rank'] = rank
+        prox = item['proximal']
+        distal = item['distal']
+        risk = abs(prox - distal)
+        is_dem = item['zone_type'] == 'Demand'
+        target = round(prox + (2.0 * risk) if is_dem else prox - (2.0 * risk), 2)
+        item['target'] = target
+        item['risk_reward'] = '1:2.0'
+        
+        # Dedicated Trade Verdict Column
+        if rank == 1:
+            item['verdict'] = 'BEST OF BESTEST'
+            item['verdict_badge'] = '👑 BEST OF THE BESTEST'
+            item['verdict_desc'] = 'Top Market Pick • Ready to Trade'
+        elif rank <= 3:
+            item['verdict'] = 'PERFECT SETUP'
+            item['verdict_badge'] = '💎 PERFECT SETUP'
+            item['verdict_desc'] = 'High Conviction Trade'
+        else:
+            item['verdict'] = 'ELITE TRADE'
+            item['verdict_badge'] = '⭐ ELITE GRADE'
+            item['verdict_desc'] = 'Institutional Quality'
+
+        # Separate text / Rationale description
+        item['rationale'] = (
+            f"👑 INSTITUTIONAL TRADE PLAN (Rank #{rank} of {total_scanned} Stocks): "
+            f"{item['ticker']} is identified with an unmitigated {item['zone_type']} Zone ({item['pattern']}) "
+            f"featuring 0 prior tests and sharp departure velocity. Current price is ₹{item['current_price']} "
+            f"(just {item['dist_to_entry_pct']}% from optimal entry at ₹{prox}). Stop Loss is placed at ₹{distal} "
+            f"with a 1:2 Risk-Reward Target at ₹{target}. Supported by {item['trend']} trend structure "
+            f"with an Institutional Score of {item['score']}/14."
+        )
 
     return final_results

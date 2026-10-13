@@ -28,6 +28,7 @@
                 </div>
                 <div class="controls-actions">
                     <select id="category-select" class="glow-select">
+                        <option value="TOTAL_MARKET" selected>🐢 Total Stock Market (Lazy Trader - Best of Bestest)</option>
                         <option value="NIFTY_50">Nifty 50 (Full Index - 50 Stocks)</option>
                         <option value="NIFTY_500">Nifty 500 (Full Index - 500 Stocks)</option>
                         <option value="BANK_NIFTY">Bank Nifty</option>
@@ -48,6 +49,10 @@
                         <option value="1mo">Monthly (1M)</option>
                         <option value="3mo">Quarterly (3M)</option>
                     </select>
+                    <button id="lazy-scan-btn" class="glow-btn lazy-gold-btn" title="1-Click: Scan all stocks and suggest the single best stock">
+                        <span class="btn-text">👑 Best of Bestest (Lazy Mode)</span>
+                        <span class="btn-glow gold-glow"></span>
+                    </button>
                     <button id="scan-btn" class="glow-btn">
                         <span class="btn-text">Run Market Scan</span>
                         <span class="btn-glow"></span>
@@ -61,6 +66,68 @@
             </div>
 
             <section class="results-section">
+                <!-- Dedicated Best of the Bestest Spotlight Hero Card -->
+                <div id="bestest-hero-card" class="bestest-hero-card hidden">
+                    <div class="bestest-card-header">
+                        <div class="bestest-title-wrap">
+                            <span class="bestest-crown">👑</span>
+                            <div>
+                                <h2 class="bestest-title">Best of the Bestest Pick</h2>
+                                <p class="bestest-subtitle">The #1 High-Probability Institutional Trade across the Whole Market</p>
+                            </div>
+                        </div>
+                        <div class="bestest-badge-wrap">
+                            <span id="bestest-score-badge" class="bestest-score-pill">12/14 ELITE</span>
+                            <span id="bestest-zone-badge" class="bestest-zone-pill zone-demand">Demand Zone</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bestest-card-grid">
+                        <div class="bestest-stat-box">
+                            <span class="bestest-stat-label">Stock Symbol</span>
+                            <span id="bestest-ticker" class="bestest-stat-val ticker-highlight">-</span>
+                        </div>
+                        <div class="bestest-stat-box">
+                            <span class="bestest-stat-label">Current Price (LTP)</span>
+                            <span id="bestest-price" class="bestest-stat-val">-</span>
+                        </div>
+                        <div class="bestest-stat-box">
+                            <span class="bestest-stat-label">Proximal (Entry)</span>
+                            <span id="bestest-entry" class="bestest-stat-val entry-highlight">-</span>
+                        </div>
+                        <div class="bestest-stat-box">
+                            <span class="bestest-stat-label">Distal (Stop Loss)</span>
+                            <span id="bestest-sl" class="bestest-stat-val sl-highlight">-</span>
+                        </div>
+                        <div class="bestest-stat-box">
+                            <span class="bestest-stat-label">Target (1:2 RR)</span>
+                            <span id="bestest-target" class="bestest-stat-val target-highlight">-</span>
+                        </div>
+                        <div class="bestest-stat-box">
+                            <span class="bestest-stat-label">Distance to Entry</span>
+                            <span id="bestest-dist" class="bestest-stat-val">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Separate Text Box for Institutional Verdict & Rationale -->
+                    <div class="bestest-rationale-box">
+                        <div class="rationale-header">
+                            <span class="rationale-icon">📝</span>
+                            <span class="rationale-title">Institutional Setup Analysis & Verdict</span>
+                        </div>
+                        <p id="bestest-rationale-text" class="rationale-text">
+                            Analyzing whole market setups...
+                        </p>
+                    </div>
+
+                    <div class="bestest-card-footer">
+                        <button id="bestest-chart-btn" class="bestest-chart-action-btn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                            <span>Open Interactive TradingView Chart & Trade Plan</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="mobile-scroll-hint">
                     <span>👈 Swipe table to explore SL, Target & Score 👉</span>
                 </div>
@@ -70,6 +137,7 @@
                             <tr>
                                 <th class="rank-th">Rank</th>
                                 <th>Ticker</th>
+                                <th>Trade Verdict</th>
                                 <th>LTP</th>
                                 <th>Zone Type</th>
                                 <th>Formation</th>
