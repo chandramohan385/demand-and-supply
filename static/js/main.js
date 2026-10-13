@@ -184,13 +184,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="tooltip-container">
                         ${item.score}/14 <span class="score-tier-tag">${scoreTierLabel}</span>
                         <div class="tooltip-text">
-                            <div style="border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px; padding-bottom: 5px; text-align: center; font-weight: bold;">Score Breakdown (Rank #${itemRank})</div>
-                            <div class="tooltip-row"><span>Freshness:</span> <span>+${item.score_breakdown['Freshness (3)']}</span></div>
-                            <div class="tooltip-row"><span>Strength:</span> <span>+${item.score_breakdown['Strength (3)']}</span></div>
-                            <div class="tooltip-row"><span>Base Size:</span> <span>+${item.score_breakdown['Base Size (3)']}</span></div>
-                            <div class="tooltip-row"><span>20/50 Crossover:</span> <span>+${item.score_breakdown['Crossover (2)']}</span></div>
-                            <div class="tooltip-row"><span>EMA Support:</span> <span>+${item.score_breakdown['EMA Position (1)']}</span></div>
-                            <div class="tooltip-row"><span>Sector Alignment:</span> <span>+${item.score_breakdown['Sector Support (2)']}</span></div>
+                            <div style="border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px; padding-bottom: 5px; text-align: center; font-weight: bold;">Institutional Score (Rank #${itemRank})</div>
+                            ${Object.entries(item.score_breakdown || {}).map(([factor, pts]) => `<div class="tooltip-row"><span>${factor}:</span> <span>+${pts}</span></div>`).join('')}
                         </div>
                     </div>
                 </td>

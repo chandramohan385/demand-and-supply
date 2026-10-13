@@ -22,7 +22,7 @@ def generate_full_market_cache():
         except Exception:
             existing_cache = {}
 
-    for interval in ['1d', '1wk']:
+    for interval in ['1d', '1wk', '1mo', '3mo']:
         print(f"\n--- Scanning Total Market for interval: {interval} ---")
         t0 = time.time()
         # Scan with is_total_market=True

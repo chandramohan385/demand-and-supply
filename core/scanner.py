@@ -180,22 +180,65 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         if zone_type_needed and zone_type != zone_type_needed:
             continue
 
-        # Immediate follow-through filter (eliminates sideways chop / fakeouts):
-        # The 1-2 bars right after leg_out must not close back inside/across proximal
-        failed_follow_through = False
-        for next_idx in range(i + 1, min(len(df), i + 3)):
-            nc = df.iloc[next_idx]
-            if zone_type == "Demand":
-                if nc['Close'] < base_body_max or nc['Low'] < base_low:
-                    failed_follow_through = True
-                    break
-            else: # Supply
-                if nc['Close'] > base_body_min or nc['High'] > base_high:
-                    failed_follow_through = True
-                    break
-        if failed_follow_through:
+        # 1. MANDATORY DOUBLE STRONG LEG-OUT ENFORCEMENT:
+        # A true institutional zone MUST have at least 2 consecutive strong candles leaving the base
+        if i + 1 >= len(df):
+            continue
+        c2 = df.iloc[i + 1]
+        c2_body = abs(c2['Close'] - c2['Open'])
+        c2_range = abs(c2['High'] - c2['Low'])
+        
+        if zone_type == "Demand":
+            is_c2_bullish = c2['Close'] > c2['Open']
+            is_c2_strong = (c2_body >= c2_range * 0.45) or (c2['Close'] > leg_out_candle['Close'])
+            if not (is_c2_bullish and is_c2_strong):
+                continue # Reject: No double strong leg-out!
+        else: # Supply
+            is_c2_bearish = c2['Close'] < c2['Open']
+            is_c2_strong = (c2_body >= c2_range * 0.45) or (c2['Close'] < leg_out_candle['Close'])
+            if not (is_c2_bearish and is_c2_strong):
+                continue # Reject: No double strong leg-out!
+
+        # 2. MANDATORY ACHIEVEMENT ENFORCEMENT:
+        # The zone MUST have broken an opposite zone or prior swing structure!
+        # For Demand: Leg-out rally MUST break prior swing high / opposite Supply zone.
+        # For Supply: Leg-out drop MUST break prior swing low / opposite Demand zone.
+        base_start_idx = i - base_count
+        lookback_prior = min(30, base_start_idx)
+        prior_window = df.iloc[base_start_idx - lookback_prior : base_start_idx]
+        if len(prior_window) < 3:
             continue
             
+        subsequent = df.iloc[i:]
+        has_achievement = False
+        achievement_pts = 0
+        
+        if zone_type == "Demand":
+            prior_opposite_high = float(prior_window['High'].max())
+            max_after_high = float(subsequent['High'].max())
+            max_after_close = float(subsequent['Close'].max())
+            
+            if max_after_close >= prior_opposite_high:
+                has_achievement = True
+                achievement_pts = 3 # Strongest: Decisively closed above opposite zone!
+            elif max_after_high >= prior_opposite_high * 1.005:
+                has_achievement = True
+                achievement_pts = 2 # Pierced/broke opposite high
+        else: # Supply
+            prior_opposite_low = float(prior_window['Low'].min())
+            min_after_low = float(subsequent['Low'].min())
+            min_after_close = float(subsequent['Close'].min())
+            
+            if min_after_close <= prior_opposite_low:
+                has_achievement = True
+                achievement_pts = 3 # Strongest: Decisively closed below opposite zone!
+            elif min_after_low <= prior_opposite_low * 0.995:
+                has_achievement = True
+                achievement_pts = 2 # Pierced/broke opposite low
+                
+        if not has_achievement:
+            continue # Reject: Zone has no achievement (did not break opposite zone)!
+
         bars_ago = (len(df) - 1) - i
         
         # Zone Marking (GTF Standard as seen in TradeTiger)
@@ -222,9 +265,7 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
                 continue # Too far away from CMP
                 
             # Departure check:
-            subsequent = df.iloc[i:]
-            max_after = float(subsequent['High'].max())
-            departure = max_after - proximal
+            departure = max_after_high - proximal
             min_dep_ratio = 1.3 if bars_ago <= 4 else 1.8
             if departure < (min_dep_ratio * risk):
                 continue
@@ -264,9 +305,7 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
                 continue
                 
             # Departure check:
-            subsequent = df.iloc[i:]
-            min_after = float(subsequent['Low'].min())
-            departure = proximal - min_after
+            departure = proximal - min_after_low
             min_dep_ratio = 1.3 if bars_ago <= 4 else 1.8
             if departure < (min_dep_ratio * risk):
                 continue
@@ -284,21 +323,6 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
                     continue # Over-tested: Spent!
             else:
                 tested_count = 0
-                
-        # Strength of Zone (Immediate post-base momentum)
-        next_candle_exciting = False
-        if i + 1 < len(df) and df['Is_Exciting'].iloc[i+1]:
-            if (zone_type == "Demand" and df['Close'].iloc[i+1] > df['Open'].iloc[i+1]) or \
-               (zone_type == "Supply" and df['Close'].iloc[i+1] < df['Open'].iloc[i+1]):
-                next_candle_exciting = True
-                
-        # Gap between last base candle and leg-out
-        last_base_candle = base_candles.iloc[-1]
-        has_gap = False
-        if zone_type == "Demand" and leg_out_candle['Open'] > last_base_candle['Close']:
-            has_gap = True
-        elif zone_type == "Supply" and leg_out_candle['Open'] < last_base_candle['Close']:
-            has_gap = True
 
         first_base_candle = df.iloc[i - base_count]
         leg_in_dir = "Rally" if leg_in_candle['Close'] > leg_in_candle['Open'] else "Drop"
@@ -308,43 +332,25 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         # 1. Freshness (Max 3 pts)
         fresh_score = 3 if tested_count == 0 else 1
             
-        # 2. Strength of the zone (Max 3 pts)
-        strength_score = 1
-        if next_candle_exciting:
-            strength_score = 3
-        elif has_gap:
-            strength_score = 2
+        # 2. Double Strong Leg-out (Max 3 pts)
+        c2_is_exciting = bool(df['Is_Exciting'].iloc[i+1])
+        double_legout_score = 3 if c2_is_exciting else 2
             
-        # 3. Base Size (Max 3 pts)
+        # 3. Achievement of Zone - Breaking Opposite Zone (Max 3 pts)
+        achievement_score = achievement_pts
+            
+        # 4. Base Size (Max 3 pts)
         base_score = 3 if base_count == 1 else (2 if base_count == 2 else 1)
             
-        # 4. Golden / Death Crossover (Max 2)
-        crossover_score = 0
-        for k in range(max(1, len(df)-10), len(df)):
-            if zone_type == "Demand":
-                if df['EMA_20'].iloc[k] > df['EMA_50'].iloc[k] and df['EMA_20'].iloc[k-1] <= df['EMA_50'].iloc[k-1]:
-                    crossover_score = 2
-                    break
-            else:
-                if df['EMA_20'].iloc[k] < df['EMA_50'].iloc[k] and df['EMA_20'].iloc[k-1] >= df['EMA_50'].iloc[k-1]:
-                    crossover_score = 2
-                    break
-                    
-        # 5. EMA Position (Max 1)
-        ema_exec_score = 0
-        if zone_type == "Demand" and current_price > df['EMA_20'].iloc[-1]:
-            ema_exec_score = 1
-        elif zone_type == "Supply" and current_price < df['EMA_20'].iloc[-1]:
-            ema_exec_score = 1
+        # 5. Trend Alignment & EMA Support (Max 2 pts)
+        trend_score = 0
+        if (zone_type == "Demand" and uptrend) or (zone_type == "Supply" and downtrend):
+            trend_score = 2
+        elif (zone_type == "Demand" and current_price > df['EMA_20'].iloc[-1]) or \
+             (zone_type == "Supply" and current_price < df['EMA_20'].iloc[-1]):
+            trend_score = 1
             
-        # 6. Sector Support (Max 2)
-        sector_score = 0
-        if zone_type == "Demand" and sector_uptrend:
-            sector_score = 2
-        elif zone_type == "Supply" and sector_downtrend:
-            sector_score = 2
-            
-        score = fresh_score + strength_score + base_score + crossover_score + ema_exec_score + sector_score
+        score = fresh_score + double_legout_score + achievement_score + base_score + trend_score
         
         # STRICT QUALITY FLOOR: Reject weak setups (< 8). Only high-probability setups!
         if score < 8:
@@ -352,11 +358,10 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
 
         score_breakdown = {
             'Freshness (3)': fresh_score,
-            'Strength (3)': strength_score,
+            'Double Leg-out (3)': double_legout_score,
+            'Achievement (3)': achievement_score,
             'Base Size (3)': base_score,
-            'Crossover (2)': crossover_score,
-            'EMA Position (1)': ema_exec_score,
-            'Sector Support (2)': sector_score
+            'Trend & EMA (2)': trend_score
         }
 
         # Ranking score: top priority to timeline recency to CMP, CMP proximity, score, and trend
@@ -373,9 +378,10 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
             'date_found': leg_out_candle[date_col],
             'start_date': first_base_candle[date_col],
             'base_count': base_count,
-            'has_gap': has_gap,
+            'double_legout': True,
+            'has_achievement': True,
             'tested_count': tested_count,
-            'next_candle_exciting': next_candle_exciting,
+            'next_candle_exciting': c2_is_exciting,
             'dist_pct': round(dist_pct * 100, 1),
             'bars_ago': bars_ago,
             'total_rank': total_rank,
@@ -580,10 +586,10 @@ def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False)
         item['rationale'] = (
             f"👑 INSTITUTIONAL TRADE PLAN (Rank #{rank} of {total_scanned} Stocks): "
             f"{item['ticker']} is identified with an unmitigated {item['zone_type']} Zone ({item['pattern']}) "
-            f"featuring 0 prior tests and sharp departure velocity. Current price is ₹{item['current_price']} "
-            f"(just {item['dist_to_entry_pct']}% from optimal entry at ₹{prox}). Stop Loss is placed at ₹{distal} "
-            f"with a 1:2 Risk-Reward Target at ₹{target}. Supported by {item['trend']} trend structure "
-            f"with an Institutional Score of {item['score']}/14."
+            f"featuring 0 prior tests, confirmed Double Strong Leg-out candles, and verified Achievement (breaking prior opposite {('Supply' if is_dem else 'Demand')} zone). "
+            f"Current price is ₹{item['current_price']} (just {item['dist_to_entry_pct']}% from optimal entry at ₹{prox}). "
+            f"Stop Loss is placed at ₹{distal} with a 1:2 Risk-Reward Target at ₹{target}. "
+            f"Supported by {item['trend']} trend structure with an Institutional Score of {item['score']}/14."
         )
 
     return final_results
