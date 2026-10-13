@@ -56,9 +56,9 @@ STOCK_LISTS = {
         "RELIANCE", "ONGC", "IOC", "BPCL", "GAIL", 
         "HINDPETRO", "PETRONET", "IGL", "ATGL", "MGL"
     ],
-    "NIFTY_500": [], # Populated dynamically from core/stock_lists.json
-    "TOTAL_MARKET": [], # Full stock market for Lazy Trader Best of Bestest
-    "NIFTY_SMALLCAP_100": [], # Populated dynamically from core/stock_lists.json
+    "NIFTY_500": [],           # Populated dynamically from core/stock_lists.json
+    "TOTAL_MARKET": [],        # Full NSE ~2300+ stocks for Lazy Trader Best of Bestest
+    "NIFTY_SMALLCAP_100": [],  # Populated dynamically from core/stock_lists.json
     "NIFTY_MEDIA": [
         "ZEEL", "SUNTV", "NETWORK18", "TV18BRDCST", "PVRINOX", 
         "SAREGAMA", "HATHWAY", "DISHTV", "NDTV"
@@ -71,73 +71,60 @@ if os.path.exists(stock_lists_file):
     try:
         with open(stock_lists_file, 'r') as f:
             full_lists = json.load(f)
-            if 'NIFTY_50' in full_lists and len(full_lists['NIFTY_50']) == 50:
-                STOCK_LISTS['NIFTY_50'] = full_lists['NIFTY_50']
-            if 'NIFTY_500' in full_lists:
-                STOCK_LISTS['NIFTY_500'] = full_lists['NIFTY_500']
-                STOCK_LISTS['TOTAL_MARKET'] = full_lists['NIFTY_500']
-            if 'NIFTY_SMALLCAP_100' in full_lists:
-                STOCK_LISTS['NIFTY_SMALLCAP_100'] = full_lists['NIFTY_SMALLCAP_100']
+        if 'NIFTY_50' in full_lists and len(full_lists['NIFTY_50']) == 50:
+            STOCK_LISTS['NIFTY_50'] = full_lists['NIFTY_50']
+        if 'NIFTY_500' in full_lists:
+            STOCK_LISTS['NIFTY_500'] = full_lists['NIFTY_500']
+        if 'NIFTY_SMALLCAP_100' in full_lists:
+            STOCK_LISTS['NIFTY_SMALLCAP_100'] = full_lists['NIFTY_SMALLCAP_100']
+        # Full NSE market (2300+ stocks) -> Lazy Trader Best of Bestest mode
+        if 'NSE_ALL' in full_lists and len(full_lists['NSE_ALL']) > 500:
+            STOCK_LISTS['TOTAL_MARKET'] = full_lists['NSE_ALL']
+        elif 'NIFTY_500' in full_lists:
+            STOCK_LISTS['TOTAL_MARKET'] = full_lists['NIFTY_500']  # fallback
     except Exception as e:
         print(f"Error loading full stock lists: {e}")
 
 
 SECTOR_MAP = {
-    # NIFTY 50 Base
     "RELIANCE": "^CNXENERGY",
-    "TCS": "^CNXIT",
-    "INFY": "^CNXIT",
-    "HDFCBANK": "^NSEBANK",
-    "ICICIBANK": "^NSEBANK",
-    "SBIN": "^NSEBANK",
-    "KOTAKBANK": "^NSEBANK",
-    "BHARTIARTL": "^CNXMEDIA", 
+    "TCS": "^CNXIT", "INFY": "^CNXIT",
+    "HDFCBANK": "^NSEBANK", "ICICIBANK": "^NSEBANK", "SBIN": "^NSEBANK", "KOTAKBANK": "^NSEBANK",
+    "BHARTIARTL": "^CNXMEDIA",
     "ITC": "^CNXFMCG",
     "LT": "^CNXINFRA",
     "BAJFINANCE": "^CNXFIN",
     "TATASTEEL": "^CNXMETAL",
-    "M&M": "^CNXAUTO",
-    "MARUTI": "^CNXAUTO",
+    "M&M": "^CNXAUTO", "MARUTI": "^CNXAUTO",
     "SUNPHARMA": "^CNXPHARMA",
-    # BANK NIFTY
     "AXISBANK": "^NSEBANK", "INDUSINDBK": "^NSEBANK", "PNB": "^NSEBANK",
     "BANKBARODA": "^NSEBANK", "FEDERALBNK": "^NSEBANK", "IDFCFIRSTB": "^NSEBANK",
-    # NIFTY IT
     "HCLTECH": "^CNXIT", "WIPRO": "^CNXIT", "TECHM": "^CNXIT",
     "LTIM": "^CNXIT", "PERSISTENT": "^CNXIT", "COFORGE": "^CNXIT", "MPHASIS": "^CNXIT",
-    # NIFTY AUTO
     "TATAMOTORS": "^CNXAUTO", "BAJAJ-AUTO": "^CNXAUTO", "HEROMOTOCO": "^CNXAUTO",
     "EICHERMOT": "^CNXAUTO", "TVSMOTOR": "^CNXAUTO", "ASHOKLEY": "^CNXAUTO", "BOSCHLTD": "^CNXAUTO",
-    # NIFTY PHARMA
     "DRREDDY": "^CNXPHARMA", "CIPLA": "^CNXPHARMA", "DIVISLAB": "^CNXPHARMA",
     "LUPIN": "^CNXPHARMA", "AUROPHARMA": "^CNXPHARMA", "TORNTPHARM": "^CNXPHARMA",
     "ZYDUSLIFE": "^CNXPHARMA", "BIOCON": "^CNXPHARMA",
-    # NIFTY METAL
     "HINDALCO": "^CNXMETAL", "JSWSTEEL": "^CNXMETAL", "COALINDIA": "^CNXMETAL",
-    # NIFTY REALTY
-    "DLF": "^CNXREALTY", "MACROTECH": "^CNXREALTY", "GODREJPROP": "^CNXREALTY", 
-    "PRESTIGE": "^CNXREALTY", "PHOENIXLTD": "^CNXREALTY", "OBEROIRLTY": "^CNXREALTY", 
+    "DLF": "^CNXREALTY", "MACROTECH": "^CNXREALTY", "GODREJPROP": "^CNXREALTY",
+    "PRESTIGE": "^CNXREALTY", "PHOENIXLTD": "^CNXREALTY", "OBEROIRLTY": "^CNXREALTY",
     "BRIGADE": "^CNXREALTY", "SOBHA": "^CNXREALTY", "LODHA": "^CNXREALTY",
-    # NIFTY FMCG
-    "HINDUNILVR": "^CNXFMCG", "NESTLEIND": "^CNXFMCG", "BRITANNIA": "^CNXFMCG", 
-    "TATACONSUM": "^CNXFMCG", "GODREJCP": "^CNXFMCG", "DABUR": "^CNXFMCG", 
+    "HINDUNILVR": "^CNXFMCG", "NESTLEIND": "^CNXFMCG", "BRITANNIA": "^CNXFMCG",
+    "TATACONSUM": "^CNXFMCG", "GODREJCP": "^CNXFMCG", "DABUR": "^CNXFMCG",
     "MARICO": "^CNXFMCG", "COLPAL": "^CNXFMCG", "UBL": "^CNXFMCG",
-    # NIFTY PSU BANK
-    "CANBK": "^CNXPSUBANK", "UNIONBANK": "^CNXPSUBANK", "INDIANB": "^CNXPSUBANK", 
+    "CANBK": "^CNXPSUBANK", "UNIONBANK": "^CNXPSUBANK", "INDIANB": "^CNXPSUBANK",
     "IOB": "^CNXPSUBANK", "BANKINDIA": "^CNXPSUBANK", "MAHABANK": "^CNXPSUBANK", "CENTRALBK": "^CNXPSUBANK",
-    # NIFTY OIL & GAS (Energy)
-    "ONGC": "^CNXENERGY", "IOC": "^CNXENERGY", "BPCL": "^CNXENERGY", 
-    "GAIL": "^CNXENERGY", "HINDPETRO": "^CNXENERGY", "PETRONET": "^CNXENERGY", 
+    "ONGC": "^CNXENERGY", "IOC": "^CNXENERGY", "BPCL": "^CNXENERGY",
+    "GAIL": "^CNXENERGY", "HINDPETRO": "^CNXENERGY", "PETRONET": "^CNXENERGY",
     "IGL": "^CNXENERGY", "ATGL": "^CNXENERGY", "MGL": "^CNXENERGY",
-    # SMALLCAP 100
-    "SUZLON": "^NSEI", "BSE": "^NSEI", "CDSL": "^NSEI", 
-    "MCX": "^NSEI", "ANGELONE": "^NSEI", "CYIENT": "^NSEI", 
-    "RADICO": "^NSEI", "KEI": "^NSEI", "SONACOMS": "^NSEI", 
-    "CAMS": "^NSEI", "APARINDS": "^NSEI", "KAYNES": "^NSEI", 
+    "SUZLON": "^NSEI", "BSE": "^NSEI", "CDSL": "^NSEI",
+    "MCX": "^NSEI", "ANGELONE": "^NSEI", "CYIENT": "^NSEI",
+    "RADICO": "^NSEI", "KEI": "^NSEI", "SONACOMS": "^NSEI",
+    "CAMS": "^NSEI", "APARINDS": "^NSEI", "KAYNES": "^NSEI",
     "TEJASNET": "^NSEI", "CHALET": "^NSEI", "PVRINOX": "^NSEI",
-    # NIFTY MEDIA
-    "ZEEL": "^CNXMEDIA", "SUNTV": "^CNXMEDIA", "NETWORK18": "^CNXMEDIA", 
-    "TV18BRDCST": "^CNXMEDIA", "SAREGAMA": "^CNXMEDIA", "HATHWAY": "^CNXMEDIA", 
+    "ZEEL": "^CNXMEDIA", "SUNTV": "^CNXMEDIA", "NETWORK18": "^CNXMEDIA",
+    "TV18BRDCST": "^CNXMEDIA", "SAREGAMA": "^CNXMEDIA", "HATHWAY": "^CNXMEDIA",
     "DISHTV": "^CNXMEDIA", "NDTV": "^CNXMEDIA"
 }
 
@@ -154,7 +141,48 @@ def api_scan():
     try:
         results = scan_tickers(tickers, interval=interval, sector_map=SECTOR_MAP, is_total_market=is_total_market)
         best_pick = results[0] if results else None
-        return jsonify({'status': 'success', 'data': results, 'best_pick': best_pick})
+        total_count = len(tickers)
+        return jsonify({'status': 'success', 'data': results, 'best_pick': best_pick, 'total_scanned': total_count})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/api/stock_count')
+def api_stock_count():
+    """Returns the count of stocks in each category for UI display."""
+    counts = {k: len(v) for k, v in STOCK_LISTS.items()}
+    return jsonify(counts)
+
+@app.route('/api/update_nse_list', methods=['POST'])
+def api_update_nse_list():
+    """Refresh the NSE_ALL list by downloading fresh from NSE archives."""
+    try:
+        import urllib.request
+        import csv
+        import io
+        url = 'https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv'
+        req_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Referer': 'https://www.nseindia.com',
+        }
+        req = urllib.request.Request(url, headers=req_headers)
+        with urllib.request.urlopen(req, timeout=30) as response:
+            content = response.read().decode('utf-8')
+        reader = csv.DictReader(io.StringIO(content))
+        nse_all = []
+        for row in reader:
+            sym = row.get('SYMBOL', '').strip()
+            series = row.get(' SERIES', '').strip()
+            if sym and series == 'EQ':
+                nse_all.append(sym)
+        nse_all = sorted(list(set(nse_all)))
+        with open(stock_lists_file, 'r') as f:
+            sl = json.load(f)
+        sl['NSE_ALL'] = nse_all
+        with open(stock_lists_file, 'w') as f:
+            json.dump(sl, f, separators=(',', ':'))
+        STOCK_LISTS['TOTAL_MARKET'] = nse_all
+        return jsonify({'status': 'success', 'count': len(nse_all),
+                        'message': f'NSE list refreshed: {len(nse_all)} stocks loaded'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 

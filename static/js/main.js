@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (loaderStatus) {
             loaderStatus.innerText = isTotal 
-                ? '🐢 Scanning the entire stock market (500 Stocks)... Isolating only the perfect setups to reveal the Best of the Bestest...'
+                ? '🌐 Scanning the full NSE market (2,300+ Stocks)... This takes 2–3 minutes. Only the very best institutional setups will be shown...'
                 : 'Scanning index stocks, calculating base candles, and sorting from best to worst...';
         }
 
@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bestestZoneBadge.textContent = `${best.zone_type} Zone (${best.pattern})`;
         bestestZoneBadge.className = `bestest-zone-pill ${best.zone_type === 'Demand' ? 'zone-demand' : 'zone-supply'}`;
 
-        bestestRationaleText.textContent = best.rationale || `Rank #1 Institutional Pick across 500 stocks with 0 tests and pristine momentum departure.`;
+        bestestRationaleText.textContent = best.rationale || `Rank #1 Institutional Pick across 2,300+ NSE stocks — 0 tests, pristine momentum departure, and fresh unmitigated zone.`;
 
         bestestChartBtn.onclick = (e) => {
             e.preventDefault();
