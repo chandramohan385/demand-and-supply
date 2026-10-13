@@ -295,6 +295,13 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillText(badgeLabel, xStart + 8, zoneTop + Math.min(18, zoneHeight / 2 + 4));
     }
 
+    // Real-time synchronization of Zone Canvas with chart dragging, price-scale stretching & zooming
+    let animFrameId = null;
+    function scheduleZoneRedraw() {
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        animFrameId = requestAnimationFrame(drawZoneOverlay);
+    }
+
     function renderChart(item) {
         activeItem = item;
         chartSection.classList.remove('hidden');
@@ -513,13 +520,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Sync Zone Canvas with chart scrolling/zooming
-        chart.timeScale().subscribeVisibleTimeRangeChange(drawZoneOverlay);
-        chart.timeScale().subscribeVisibleLogicalRangeChange(drawZoneOverlay);
+        // Real-time synchronization of Zone Canvas with chart dragging, price-scale stretching & zooming
+        chart.timeScale().subscribeVisibleTimeRangeChange(scheduleZoneRedraw);
+        chart.timeScale().subscribeVisibleLogicalRangeChange(scheduleZoneRedraw);
+
+        // Track mouse/pointer interaction on price scale and chart canvas
+        let isInteracting = false;
+        chartContainer.addEventListener('pointerdown', () => {
+            isInteracting = true;
+            scheduleZoneRedraw();
+        });
+        window.addEventListener('pointermove', () => {
+            if (isInteracting) scheduleZoneRedraw();
+        });
+        window.addEventListener('pointerup', () => {
+            if (isInteracting) {
+                isInteracting = false;
+                scheduleZoneRedraw();
+            }
+        });
+        chartContainer.addEventListener('wheel', scheduleZoneRedraw, { passive: true });
+        chartContainer.addEventListener('touchmove', scheduleZoneRedraw, { passive: true });
+        chartContainer.addEventListener('dblclick', () => {
+            setTimeout(scheduleZoneRedraw, 50);
+        });
 
         // Fit view nicely around the zone
         chart.timeScale().fitContent();
-        setTimeout(drawZoneOverlay, 50);
+        setTimeout(scheduleZoneRedraw, 50);
 
         // Scroll page to chart
         chartSection.scrollIntoView({ behavior: 'smooth' });
@@ -530,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeChart) return;
         activeChart.timeScale().fitContent();
         activeChart.priceScale('right').applyOptions({ autoScale: true });
-        setTimeout(drawZoneOverlay, 50);
+        setTimeout(scheduleZoneRedraw, 50);
     });
 
     // Save PNG Screenshot Button
@@ -580,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 width: chartContainer.clientWidth,
                 height: responsiveH
             });
-            drawZoneOverlay();
+            scheduleZoneRedraw();
         }
     });
 });

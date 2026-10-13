@@ -109,14 +109,28 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
     elif downtrend:
         trend_status = "Downtrend"
 
-    # Strict lookback window to prevent digging years back into history:
-    # 60 candles for Daily (~3 months), 52 candles for Weekly (~1 year), 36 candles for Monthly (~3 years)
-    max_lookback = 60 if interval == "1d" else (52 if interval == "1wk" else 36)
-    start_idx = max(8, len(df) - max_lookback)
+    # Strict lookback window (Swing Horizon) to prevent digging years back into history:
+    # 3mo: 6 candles (~1.5 years), 1mo: 12 candles (~1 year), 1wk: 20 candles (~5 months), 1d: 30 candles (~1.5 months)
+    lookback_map = {
+        "1d": 30,
+        "1wk": 20,
+        "1mo": 12,
+        "3mo": 6
+    }
+    max_lookback = lookback_map.get(interval, 30)
+    start_idx = max(5, len(df) - max_lookback)
+    
+    max_dist_map = {
+        "1d": 0.12,
+        "1wk": 0.15,
+        "1mo": 0.18,
+        "3mo": 0.18
+    }
+    max_dist = max_dist_map.get(interval, 0.15)
     
     candidates = []
     
-    # Reverse loop to search from current market action backwards:
+    # Reverse loop to strictly search from Current Market Price (right side) backwards (left side):
     for i in range(len(df) - 2, start_idx, -1):
         leg_out_candle = df.iloc[i]
         if not df['Is_Exciting'].iloc[i]:
@@ -159,7 +173,7 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         if zone_type_needed and zone_type != zone_type_needed:
             continue
 
-        # Immediate follow-through filter (eliminates sideways chop / fakeouts like UNIONBANK Daily):
+        # Immediate follow-through filter (eliminates sideways chop / fakeouts):
         # The 1-2 bars right after leg_out must not close back inside/across proximal
         failed_follow_through = False
         for next_idx in range(i + 1, min(len(df), i + 3)):
@@ -188,39 +202,40 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
                 continue
                 
             # Base compactness check
-            max_risk_pct = 0.08 if interval == "1d" else (0.15 if interval == "1wk" else 0.18)
+            max_risk_pct = 0.08 if interval == "1d" else (0.12 if interval == "1wk" else 0.16)
             if (risk / proximal) > max_risk_pct:
                 continue # Base too wide/loose
                 
-            # Current Price Viability & CMP Proximity Filter:
-            # 1. Price must not have violated distal
-            if current_price < distal:
+            # Current Price Viability (Check from CMP downwards):
+            # Demand zone MUST be under CMP (or CMP testing entry within 1.5%)
+            if current_price < (proximal * 0.985):
                 continue
-            # 2. Distance from CMP: Must be within 18% of CMP (or testing proximal)
             dist_pct = (current_price - proximal) / proximal
-            if dist_pct < -0.05 or dist_pct > 0.18:
-                continue # Outside realistic trade horizon!
+            if dist_pct > max_dist:
+                continue # Too far away from CMP
                 
             # Departure check:
             subsequent = df.iloc[i:]
             max_after = float(subsequent['High'].max())
             departure = max_after - proximal
-            min_dep_ratio = 1.3 if bars_ago <= 5 else 1.8
+            min_dep_ratio = 1.3 if bars_ago <= 4 else 1.8
             if departure < (min_dep_ratio * risk):
                 continue
                 
-            # Freshness / Retests:
-            peak_idx = subsequent['High'].idxmax()
-            after_peak = df.loc[peak_idx + 1:] if peak_idx + 1 < len(df) else pd.DataFrame()
-            if not after_peak.empty:
-                if after_peak['Low'].min() < distal:
+            # Lifecycle, Freshness & Penetration check:
+            post_legout = df.iloc[i+1:]
+            if not post_legout.empty:
+                if float(post_legout['Low'].min()) < distal:
                     continue # Violated!
-                tested_count = int(len(after_peak[after_peak['Low'] <= proximal]))
+                # Deep penetration filter: if price pierced > 20% into zone, pending orders were filled
+                deep_penetration = proximal - (0.20 * risk)
+                if float(post_legout['Low'].min()) <= deep_penetration:
+                    continue # Penetrated deeply: Spent!
+                tested_count = int(len(post_legout[post_legout['Low'] <= proximal]))
+                if tested_count > 1:
+                    continue # Over-tested: Spent!
             else:
                 tested_count = 0
-                
-            if tested_count > 2:
-                continue # Over-tested
                 
         else: # Supply Zone
             proximal = round(base_body_min, 2)
@@ -229,36 +244,39 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
             if risk <= 0:
                 continue
                 
-            max_risk_pct = 0.08 if interval == "1d" else (0.15 if interval == "1wk" else 0.18)
+            max_risk_pct = 0.08 if interval == "1d" else (0.12 if interval == "1wk" else 0.16)
             if (risk / proximal) > max_risk_pct:
                 continue
                 
-            # Current Price Viability & CMP Proximity Filter:
-            if current_price > distal:
+            # Current Price Viability (Check from CMP upwards):
+            # Supply zone MUST be above CMP (or CMP testing entry within 1.5%)
+            if current_price > (proximal * 1.015):
                 continue
             dist_pct = (proximal - current_price) / proximal
-            if dist_pct < -0.05 or dist_pct > 0.18:
+            if dist_pct > max_dist:
                 continue
                 
             # Departure check:
             subsequent = df.iloc[i:]
             min_after = float(subsequent['Low'].min())
             departure = proximal - min_after
-            min_dep_ratio = 1.3 if bars_ago <= 5 else 1.8
+            min_dep_ratio = 1.3 if bars_ago <= 4 else 1.8
             if departure < (min_dep_ratio * risk):
                 continue
                 
-            trough_idx = subsequent['Low'].idxmin()
-            after_trough = df.loc[trough_idx + 1:] if trough_idx + 1 < len(df) else pd.DataFrame()
-            if not after_trough.empty:
-                if after_trough['High'].max() > distal:
-                    continue
-                tested_count = int(len(after_trough[after_trough['High'] >= proximal]))
+            # Lifecycle, Freshness & Penetration check:
+            post_legout = df.iloc[i+1:]
+            if not post_legout.empty:
+                if float(post_legout['High'].max()) > distal:
+                    continue # Violated!
+                deep_penetration = proximal + (0.20 * risk)
+                if float(post_legout['High'].max()) >= deep_penetration:
+                    continue # Penetrated deeply: Spent!
+                tested_count = int(len(post_legout[post_legout['High'] >= proximal]))
+                if tested_count > 1:
+                    continue # Over-tested: Spent!
             else:
                 tested_count = 0
-                
-            if tested_count > 2:
-                continue
                 
         # Strength of Zone (Immediate post-base momentum)
         next_candle_exciting = False
@@ -280,16 +298,65 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         leg_out_dir = "Rally" if is_rally_out else "Drop"
         pattern = f"{leg_in_dir}-Base-{leg_out_dir}"
 
-        # Ranking score (to ensure we pick zones near CMP and timeline priority):
-        proximity_score = max(0, 40 - abs(dist_pct) * 200)
-        recency_score = max(0, 30 - bars_ago)
-        trend_score = 0
-        if uptrend and zone_type == "Demand": trend_score = 20
-        elif downtrend and zone_type == "Supply": trend_score = 20
-        dep_ratio = departure / risk
-        dep_bonus = min(10, dep_ratio * 2)
+        # 1. Freshness (Max 3 pts)
+        fresh_score = 3 if tested_count == 0 else 1
+            
+        # 2. Strength of the zone (Max 3 pts)
+        strength_score = 1
+        if next_candle_exciting:
+            strength_score = 3
+        elif has_gap:
+            strength_score = 2
+            
+        # 3. Base Size (Max 3 pts)
+        base_score = 3 if base_count == 1 else (2 if base_count == 2 else 1)
+            
+        # 4. Golden / Death Crossover (Max 2)
+        crossover_score = 0
+        for k in range(max(1, len(df)-10), len(df)):
+            if zone_type == "Demand":
+                if df['EMA_20'].iloc[k] > df['EMA_50'].iloc[k] and df['EMA_20'].iloc[k-1] <= df['EMA_50'].iloc[k-1]:
+                    crossover_score = 2
+                    break
+            else:
+                if df['EMA_20'].iloc[k] < df['EMA_50'].iloc[k] and df['EMA_20'].iloc[k-1] >= df['EMA_50'].iloc[k-1]:
+                    crossover_score = 2
+                    break
+                    
+        # 5. EMA Position (Max 1)
+        ema_exec_score = 0
+        if zone_type == "Demand" and current_price > df['EMA_20'].iloc[-1]:
+            ema_exec_score = 1
+        elif zone_type == "Supply" and current_price < df['EMA_20'].iloc[-1]:
+            ema_exec_score = 1
+            
+        # 6. Sector Support (Max 2)
+        sector_score = 0
+        if zone_type == "Demand" and sector_uptrend:
+            sector_score = 2
+        elif zone_type == "Supply" and sector_downtrend:
+            sector_score = 2
+            
+        score = fresh_score + strength_score + base_score + crossover_score + ema_exec_score + sector_score
+        
+        # STRICT QUALITY FLOOR: Reject weak setups (< 8). Only high-probability setups!
+        if score < 8:
+            continue
 
-        rank_score = proximity_score + recency_score + trend_score + dep_bonus
+        score_breakdown = {
+            'Freshness (3)': fresh_score,
+            'Strength (3)': strength_score,
+            'Base Size (3)': base_score,
+            'Crossover (2)': crossover_score,
+            'EMA Position (1)': ema_exec_score,
+            'Sector Support (2)': sector_score
+        }
+
+        # Ranking score: top priority to timeline recency to CMP, CMP proximity, score, and trend
+        recency_rank = max(0, 30 - bars_ago)
+        proximity_rank = max(0, 30 - dist_pct * 100)
+        trend_rank = 15 if (uptrend and zone_type == "Demand") or (downtrend and zone_type == "Supply") else 0
+        total_rank = (score * 5) + recency_rank + proximity_rank + trend_rank
 
         candidates.append({
             'pattern': pattern,
@@ -304,72 +371,20 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
             'next_candle_exciting': next_candle_exciting,
             'dist_pct': round(dist_pct * 100, 1),
             'bars_ago': bars_ago,
-            'rank_score': rank_score,
+            'total_rank': total_rank,
+            'score': score,
+            'score_breakdown': score_breakdown,
             'idx': i
         })
 
     if not candidates:
         return None
 
-    # Sort candidates by rank_score descending (top priority to CMP proximity, recency, trend)
-    candidates.sort(key=lambda x: x['rank_score'], reverse=True)
+    # Pick candidate with highest ranking score
+    candidates.sort(key=lambda x: x['total_rank'], reverse=True)
     latest_zone = candidates[0]
-    
-    # 1. Freshness (Max 3 pts)
-    fresh_score = 3 if latest_zone['tested_count'] == 0 else 1
-        
-    # 2. Strength of the zone (Max 3 pts)
-    strength_score = 1
-    if latest_zone['next_candle_exciting']:
-        strength_score = 3
-    elif latest_zone['has_gap']:
-        strength_score = 2
-        
-    # 3. Base Size (Max 3 pts - fewer base candles = higher institutional score)
-    base_score = 0
-    if latest_zone['base_count'] == 1:
-        base_score = 3
-    elif latest_zone['base_count'] == 2:
-        base_score = 2
-    elif latest_zone['base_count'] == 3:
-        base_score = 1
-        
-    # 4. Golden / Death Crossover (Max 2)
-    crossover_score = 0
-    for j in range(max(1, len(df)-10), len(df)):
-        if latest_zone['zone_type'] == "Demand":
-            if df['EMA_20'].iloc[j] > df['EMA_50'].iloc[j] and df['EMA_20'].iloc[j-1] <= df['EMA_50'].iloc[j-1]:
-                crossover_score = 2
-                break
-        else:
-            if df['EMA_20'].iloc[j] < df['EMA_50'].iloc[j] and df['EMA_20'].iloc[j-1] >= df['EMA_50'].iloc[j-1]:
-                crossover_score = 2
-                break
-                
-    # 5. EMA at Execution (Max 1)
-    ema_exec_score = 0
-    if latest_zone['zone_type'] == "Demand" and current_price > df['EMA_20'].iloc[-1]:
-        ema_exec_score = 1
-    elif latest_zone['zone_type'] == "Supply" and current_price < df['EMA_20'].iloc[-1]:
-        ema_exec_score = 1
-        
-    # 6. Sector Analysis (Max 2)
-    sector_score = 0
-    if latest_zone['zone_type'] == "Demand" and sector_uptrend:
-        sector_score = 2
-    elif latest_zone['zone_type'] == "Supply" and sector_downtrend:
-        sector_score = 2
-        
-    score = fresh_score + strength_score + base_score + crossover_score + ema_exec_score + sector_score
-    
-    score_breakdown = {
-        'Freshness (3)': fresh_score,
-        'Strength (3)': strength_score,
-        'Base Size (3)': base_score,
-        'Crossover (2)': crossover_score,
-        'EMA Position (1)': ema_exec_score,
-        'Sector Support (2)': sector_score
-    }
+    score = latest_zone['score']
+    score_breakdown = latest_zone['score_breakdown']
     
     # Prepare history for charting
     df['DateStr'] = df[date_col].dt.strftime('%Y-%m-%d')
