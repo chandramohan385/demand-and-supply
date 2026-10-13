@@ -20,7 +20,7 @@ def fetch_data(ticker, interval="1d", period="1y"):
         print(f"Error fetching data for {ticker}: {e}")
         return None
 
-def fetch_batch_data(tickers, interval="1d", period="2y"):
+def fetch_batch_data(tickers, interval="1d", period="1y"):
     if not tickers:
         return {}
     
@@ -66,7 +66,7 @@ def fetch_batch_data(tickers, interval="1d", period="2y"):
             print(f"Error fetching batch chunk: {e}")
         return chunk_res
 
-    with ThreadPoolExecutor(max_workers=min(5, len(chunks))) as executor:
+    with ThreadPoolExecutor(max_workers=min(8, len(chunks))) as executor:
         for part in executor.map(download_and_parse, chunks):
             res_dict.update(part)
 
@@ -395,7 +395,7 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
     
     # Prepare history for charting
     df['DateStr'] = df[date_col].dt.strftime('%Y-%m-%d')
-    history_df = df[['DateStr', 'Open', 'High', 'Low', 'Close', 'EMA_20', 'EMA_50']].tail(300).dropna()
+    history_df = df[['DateStr', 'Open', 'High', 'Low', 'Close', 'EMA_20', 'EMA_50']].tail(150).dropna()
     history = []
     for _, row in history_df.iterrows():
         history.append({
@@ -438,15 +438,15 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
     }
 
 def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False):
-    period = "2y"
+    period = "1y"
     if interval == "1wk":
-        period = "5y"
+        period = "2y"
     elif interval in ["1mo", "3mo"]:
-        period = "max"
+        period = "5y"
         
     htf_map = {
-        "1d": ("1wk", "5y"),
-        "1wk": ("1mo", "max"),
+        "1d": ("1wk", "2y"),
+        "1wk": ("1mo", "5y"),
         "1mo": ("3mo", "max"),
         "3mo": None
     }
@@ -545,6 +545,10 @@ def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False)
             final_results = perfect_candidates[:15]
         else:
             final_results = [c for c in final_results if c.get('score', 0) >= 9][:15]
+
+    # For large index scans (like Nifty 500), cap at top 35 best-ranked setups to prevent payload bloat
+    if not is_total_market and len(final_results) > 35:
+        final_results = final_results[:35]
 
     # Assign explicit 1-based ranks, target prices, verdicts and rationale
     total_scanned = len(tickers)

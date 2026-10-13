@@ -1,7 +1,7 @@
 import os
 import json
 from flask import Flask, render_template, jsonify, request
-from core.scanner import scan_tickers
+from core.scanner import scan_tickers, fetch_data
 
 app = Flask(__name__)
 
@@ -57,7 +57,7 @@ STOCK_LISTS = {
         "HINDPETRO", "PETRONET", "IGL", "ATGL", "MGL"
     ],
     "NIFTY_500": [],           # Populated dynamically from core/stock_lists.json
-    "TOTAL_MARKET": [],        # Full NSE ~2300+ stocks for Lazy Trader Best of Bestest
+    "TOTAL_MARKET": [],        # Full NSE 2,300+ stocks for Lazy Trader Best of Bestest
     "NIFTY_SMALLCAP_100": [],  # Populated dynamically from core/stock_lists.json
     "NIFTY_MEDIA": [
         "ZEEL", "SUNTV", "NETWORK18", "TV18BRDCST", "PVRINOX", 
@@ -77,14 +77,12 @@ if os.path.exists(stock_lists_file):
             STOCK_LISTS['NIFTY_500'] = full_lists['NIFTY_500']
         if 'NIFTY_SMALLCAP_100' in full_lists:
             STOCK_LISTS['NIFTY_SMALLCAP_100'] = full_lists['NIFTY_SMALLCAP_100']
-        # Full NSE market (2300+ stocks) -> Lazy Trader Best of Bestest mode
         if 'NSE_ALL' in full_lists and len(full_lists['NSE_ALL']) > 500:
             STOCK_LISTS['TOTAL_MARKET'] = full_lists['NSE_ALL']
         elif 'NIFTY_500' in full_lists:
-            STOCK_LISTS['TOTAL_MARKET'] = full_lists['NIFTY_500']  # fallback
+            STOCK_LISTS['TOTAL_MARKET'] = full_lists['NIFTY_500']
     except Exception as e:
         print(f"Error loading full stock lists: {e}")
-
 
 SECTOR_MAP = {
     "RELIANCE": "^CNXENERGY",
@@ -137,12 +135,76 @@ def api_scan():
     interval = request.args.get('interval', '1d')
     category = request.args.get('category', 'TOTAL_MARKET')
     is_total_market = (category == 'TOTAL_MARKET')
+
+    # Instant response for TOTAL_MARKET from pre-computed cache
+    if is_total_market:
+        cache_file = os.path.join(os.path.dirname(__file__), 'core', 'market_cache.json')
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    cache_data = json.load(f)
+                if interval in cache_data and cache_data[interval].get('data'):
+                    entry = cache_data[interval]
+                    return jsonify({
+                        'status': 'success',
+                        'data': entry['data'],
+                        'best_pick': entry['best_pick'],
+                        'total_scanned': entry.get('total_scanned', len(STOCK_LISTS['TOTAL_MARKET'])),
+                        'cached': True
+                    })
+            except Exception as e:
+                print(f"Error loading market cache: {e}")
+
+    # For index live scans
     tickers = STOCK_LISTS.get(category, STOCK_LISTS.get('TOTAL_MARKET', STOCK_LISTS['NIFTY_50']))
+    
+    # Cloud/Vercel protection: cap ticker universe if uncached and excessively large
+    if is_total_market and len(tickers) > 150:
+        tickers = STOCK_LISTS.get('NIFTY_500', tickers)[:100]
+
     try:
         results = scan_tickers(tickers, interval=interval, sector_map=SECTOR_MAP, is_total_market=is_total_market)
         best_pick = results[0] if results else None
-        total_count = len(tickers)
-        return jsonify({'status': 'success', 'data': results, 'best_pick': best_pick, 'total_scanned': total_count})
+        total_count = len(STOCK_LISTS.get(category, tickers))
+        return jsonify({
+            'status': 'success',
+            'data': results,
+            'best_pick': best_pick,
+            'total_scanned': total_count
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/api/history')
+def api_history():
+    """Fetch candlestick history on demand for TradingView charting."""
+    ticker = request.args.get('ticker')
+    interval = request.args.get('interval', '1d')
+    if not ticker:
+        return jsonify({'status': 'error', 'message': 'Ticker required'})
+    try:
+        period = "1y" if interval == "1d" else ("2y" if interval == "1wk" else "5y")
+        df = fetch_data(ticker, interval=interval, period=period)
+        if df is None or len(df) < 10:
+            return jsonify({'status': 'error', 'message': f'No historical data for {ticker}'})
+        
+        df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
+        df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
+        date_col = 'Date' if 'Date' in df.columns else 'Datetime'
+        df['DateStr'] = df[date_col].dt.strftime('%Y-%m-%d')
+        history_df = df[['DateStr', 'Open', 'High', 'Low', 'Close', 'EMA_20', 'EMA_50']].tail(150).dropna()
+        history = []
+        for _, row in history_df.iterrows():
+            history.append({
+                'DateStr': str(row['DateStr']),
+                'Open': round(float(row['Open']), 2),
+                'High': round(float(row['High']), 2),
+                'Low': round(float(row['Low']), 2),
+                'Close': round(float(row['Close']), 2),
+                'EMA_20': round(float(row['EMA_20']), 2),
+                'EMA_50': round(float(row['EMA_50']), 2)
+            })
+        return jsonify({'status': 'success', 'ticker': ticker, 'history': history})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)})
 

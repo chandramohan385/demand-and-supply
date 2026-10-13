@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (loaderStatus) {
             loaderStatus.innerText = isTotal 
-                ? '🌐 Scanning the full NSE market (2,300+ Stocks)... This takes 2–3 minutes. Only the very best institutional setups will be shown...'
+                ? '👑 Analyzing all 2,300+ NSE stocks... Surfacing the Best of the Bestest institutional trade setup...'
                 : 'Scanning index stocks, calculating base candles, and sorting from best to worst...';
         }
 
@@ -394,6 +394,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const isDemand = item.zone_type === 'Demand';
         const zoneDesc = isDemand ? 'Support / Institutional Accumulation' : 'Resistance / Institutional Distribution';
         tvZoneDetails.textContent = `${item.zone_type} Base: ₹${item.proximal.toFixed(2)} to ₹${item.distal.toFixed(2)} • ${zoneDesc}`;
+
+        // If history is not already bundled, fetch on demand
+        if (!item.history || item.history.length === 0) {
+            fetch(`/api/history?ticker=${item.ticker}&interval=${timeframeSelect.value}`)
+                .then(r => r.json())
+                .then(res => {
+                    if (res.status === 'success' && res.history) {
+                        item.history = res.history;
+                        renderChart(item);
+                    }
+                })
+                .catch(err => console.error('Error fetching history:', err));
+            return;
+        }
 
         // Cleanup old chart
         if (activeChart) {
