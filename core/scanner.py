@@ -539,18 +539,18 @@ def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False)
 
     final_results = sorted(final_results, key=rank_key)
 
-    # When scanning Total Market (Lazy Trader mode): "Only the best, the perfect, should be shown"
+    # When scanning Total Market (Lazy Trader mode): Rank and deliver the Top 100 best of bestest setups
     if is_total_market and final_results:
         perfect_candidates = [
             c for c in final_results 
             if c.get('score', 0) >= 10 
             and c.get('score_breakdown', {}).get('Freshness (3)', 0) == 3
-            and c.get('dist_to_entry_pct', 999.0) <= 10.0
+            and c.get('dist_to_entry_pct', 999.0) <= 15.0
         ]
-        if len(perfect_candidates) >= 3:
-            final_results = perfect_candidates[:20]
-        else:
-            final_results = [c for c in final_results if c.get('score', 0) >= 9][:20]
+        perfect_tickers = {c['ticker'] for c in perfect_candidates}
+        other_candidates = [c for c in final_results if c['ticker'] not in perfect_tickers and c.get('score', 0) >= 8]
+        combined = perfect_candidates + other_candidates
+        final_results = combined[:100]
 
     # For large index scans (like Nifty 500), cap at top 35 best-ranked setups to prevent payload bloat
     if not is_total_market and len(final_results) > 35:
@@ -560,6 +560,9 @@ def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False)
     total_scanned = len(tickers)
     for rank, item in enumerate(final_results, start=1):
         item['rank'] = rank
+        # Optimize payload: Keep full history for top 15 setups, fetch on-demand for rest
+        if is_total_market and rank > 15:
+            item['history'] = []
         prox = item['proximal']
         distal = item['distal']
         risk = abs(prox - distal)

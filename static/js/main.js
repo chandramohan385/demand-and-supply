@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     evaluated = Math.min(evaluated + Math.floor(Math.random() * 320 + 200), 2349);
                     loaderStatus.innerText = `🔍 Evaluated ${evaluated} of 2,349 NSE stocks... Verifying Double Strong Leg-outs & Prior Zone Achievements...`;
                     if (evaluated >= 2349) {
-                        loaderStatus.innerText = `👑 All 2,349 stocks evaluated! Selecting and ranking the Top 20 Best of the Bestest setups...`;
+                        loaderStatus.innerText = `👑 All 2,349 stocks evaluated! Selecting and ranking the Top 100 Best of the Bestest setups...`;
                         clearInterval(scanInterval);
                     }
                 }, 220);
