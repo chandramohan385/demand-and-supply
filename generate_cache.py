@@ -25,9 +25,8 @@ def generate_full_market_cache():
     for interval in ['1d', '1wk', '1mo', '3mo']:
         print(f"\n--- Scanning Total Market for interval: {interval} ---")
         t0 = time.time()
-        # Scan with is_total_market=True
-        # To avoid rate limits, we scan the top 500 liquid stocks first
-        top_universe = STOCK_LISTS.get('NIFTY_500', all_stocks[:500])
+        # Full market scan across the complete universe of 2,349 NSE stocks
+        top_universe = all_stocks
         results = scan_tickers(top_universe, interval=interval, sector_map=SECTOR_MAP, is_total_market=True)
         print(f"Scan for {interval} completed in {time.time()-t0:.2f}s with {len(results)} elite setups found")
         

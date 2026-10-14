@@ -158,10 +158,6 @@ def api_scan():
     # For index live scans
     tickers = STOCK_LISTS.get(category, STOCK_LISTS.get('TOTAL_MARKET', STOCK_LISTS['NIFTY_50']))
     
-    # Cloud/Vercel protection: cap ticker universe if uncached and excessively large
-    if is_total_market and len(tickers) > 150:
-        tickers = STOCK_LISTS.get('NIFTY_500', tickers)[:100]
-
     try:
         results = scan_tickers(tickers, interval=interval, sector_map=SECTOR_MAP, is_total_market=is_total_market)
         best_pick = results[0] if results else None

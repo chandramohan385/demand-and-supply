@@ -548,9 +548,9 @@ def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False)
             and c.get('dist_to_entry_pct', 999.0) <= 10.0
         ]
         if len(perfect_candidates) >= 3:
-            final_results = perfect_candidates[:15]
+            final_results = perfect_candidates[:20]
         else:
-            final_results = [c for c in final_results if c.get('score', 0) >= 9][:15]
+            final_results = [c for c in final_results if c.get('score', 0) >= 9][:20]
 
     # For large index scans (like Nifty 500), cap at top 35 best-ranked setups to prevent payload bloat
     if not is_total_market and len(final_results) > 35:
