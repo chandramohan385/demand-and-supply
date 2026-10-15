@@ -116,22 +116,22 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
     elif downtrend:
         trend_status = "Downtrend"
 
-    # Strict lookback window (Swing Horizon) to prevent digging years back into history:
-    # 3mo: 6 candles (~1.5 years), 1mo: 12 candles (~1 year), 1wk: 20 candles (~5 months), 1d: 30 candles (~1.5 months)
+    # Lookback window (Swing Horizon) to search from CMP backwards:
+    # 1d: 65 candles (~3 months), 1wk: 35 candles (~8 months), 1mo: 20 candles (~1.5 years), 3mo: 10 candles
     lookback_map = {
-        "1d": 30,
-        "1wk": 20,
-        "1mo": 12,
-        "3mo": 6
+        "1d": 65,
+        "1wk": 35,
+        "1mo": 20,
+        "3mo": 10
     }
-    max_lookback = lookback_map.get(interval, 30)
+    max_lookback = lookback_map.get(interval, 65)
     start_idx = max(5, len(df) - max_lookback)
     
     max_dist_map = {
-        "1d": 0.12,
-        "1wk": 0.15,
-        "1mo": 0.18,
-        "3mo": 0.18
+        "1d": 0.15,
+        "1wk": 0.18,
+        "1mo": 0.20,
+        "3mo": 0.20
     }
     max_dist = max_dist_map.get(interval, 0.15)
     
@@ -252,7 +252,7 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
                 continue
                 
             # Base compactness check
-            max_risk_pct = 0.08 if interval == "1d" else (0.12 if interval == "1wk" else 0.16)
+            max_risk_pct = 0.10 if interval == "1d" else (0.14 if interval == "1wk" else 0.18)
             if (risk / proximal) > max_risk_pct:
                 continue # Base too wide/loose
                 
@@ -270,18 +270,18 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
             if departure < (min_dep_ratio * risk):
                 continue
                 
-            # Lifecycle, Freshness & Penetration check:
-            post_legout = df.iloc[i+1:]
+            # Lifecycle, Freshness & Penetration check (evaluated AFTER C1 + C2 legout departure):
+            post_legout = df.iloc[i+2:]
             if not post_legout.empty:
                 if float(post_legout['Low'].min()) < distal:
-                    continue # Violated!
-                # Deep penetration filter: if price pierced > 20% into zone, pending orders were filled
-                deep_penetration = proximal - (0.20 * risk)
-                if float(post_legout['Low'].min()) <= deep_penetration:
-                    continue # Penetrated deeply: Spent!
+                    continue # Violated! Stop Loss triggered.
                 tested_count = int(len(post_legout[post_legout['Low'] <= proximal]))
                 if tested_count > 1:
                     continue # Over-tested: Spent!
+                # Deep penetration filter: if price pierced > 50% into zone base, pending orders were exhausted
+                deep_penetration = proximal - (0.50 * risk)
+                if tested_count == 1 and float(post_legout['Low'].min()) <= deep_penetration:
+                    continue # Retested too deeply
             else:
                 tested_count = 0
                 
@@ -292,7 +292,7 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
             if risk <= 0:
                 continue
                 
-            max_risk_pct = 0.08 if interval == "1d" else (0.12 if interval == "1wk" else 0.16)
+            max_risk_pct = 0.10 if interval == "1d" else (0.14 if interval == "1wk" else 0.18)
             if (risk / proximal) > max_risk_pct:
                 continue
                 
@@ -310,17 +310,17 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
             if departure < (min_dep_ratio * risk):
                 continue
                 
-            # Lifecycle, Freshness & Penetration check:
-            post_legout = df.iloc[i+1:]
+            # Lifecycle, Freshness & Penetration check (evaluated AFTER C1 + C2 legout departure):
+            post_legout = df.iloc[i+2:]
             if not post_legout.empty:
                 if float(post_legout['High'].max()) > distal:
-                    continue # Violated!
-                deep_penetration = proximal + (0.20 * risk)
-                if float(post_legout['High'].max()) >= deep_penetration:
-                    continue # Penetrated deeply: Spent!
+                    continue # Violated! Stop Loss triggered.
                 tested_count = int(len(post_legout[post_legout['High'] >= proximal]))
                 if tested_count > 1:
                     continue # Over-tested: Spent!
+                deep_penetration = proximal + (0.50 * risk)
+                if tested_count == 1 and float(post_legout['High'].max()) >= deep_penetration:
+                    continue
             else:
                 tested_count = 0
 
@@ -443,7 +443,7 @@ def analyze_gtf(df, interval="1d", zone_type_needed=None, sector_uptrend=False, 
         'history': history
     }
 
-def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False):
+def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False, zone_type=None, return_splits=False):
     period = "1y"
     if interval == "1wk":
         period = "2y"
@@ -488,14 +488,17 @@ def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False)
             sec_up = sector_trends[sector_map[t]]['up']
             sec_down = sector_trends[sector_map[t]]['down']
             
-        analysis = analyze_gtf(df, interval, sector_uptrend=sec_up, sector_downtrend=sec_down)
-        if analysis and analysis.get('score', 0) >= 8:
-            analysis['ticker'] = t
-            cmp = analysis['current_price']
-            prox = analysis['proximal']
-            dist_pct = abs(cmp - prox) / prox * 100 if prox > 0 else 0
-            analysis['dist_to_entry_pct'] = round(dist_pct, 2)
-            candidates.append(analysis)
+        # Check both Demand and Supply so neither is crowded out
+        types_to_scan = ["Demand", "Supply"] if (is_total_market or return_splits) else ([zone_type] if zone_type else [None])
+        for z_req in types_to_scan:
+            analysis = analyze_gtf(df, interval, sector_uptrend=sec_up, sector_downtrend=sec_down, zone_type_needed=z_req)
+            if analysis and analysis.get('score', 0) >= 8:
+                analysis['ticker'] = t
+                cmp = analysis['current_price']
+                prox = analysis['proximal']
+                dist_pct = abs(cmp - prox) / prox * 100 if prox > 0 else 0
+                analysis['dist_to_entry_pct'] = round(dist_pct, 2)
+                candidates.append(analysis)
 
     # Batch HTF Curve check on candidates only
     htf_info = htf_map.get(interval)
@@ -537,62 +540,72 @@ def scan_tickers(tickers, interval="1d", sector_map=None, is_total_market=False)
                            (x.get('zone_type') == 'Supply' and x.get('trend') == 'Downtrend') else 0
         return (-score, -trend_align, dist, -freshness, -base_size)
 
-    final_results = sorted(final_results, key=rank_key)
+    total_scanned = len(tickers)
 
-    # When scanning Total Market (Lazy Trader mode): Rank and deliver the Top 100 best of bestest setups
-    if is_total_market and final_results:
-        perfect_candidates = [
-            c for c in final_results 
+    def format_ranked_list(results_list, max_count=100):
+        perfect = [
+            c for c in results_list 
             if c.get('score', 0) >= 10 
             and c.get('score_breakdown', {}).get('Freshness (3)', 0) == 3
             and c.get('dist_to_entry_pct', 999.0) <= 15.0
         ]
-        perfect_tickers = {c['ticker'] for c in perfect_candidates}
-        other_candidates = [c for c in final_results if c['ticker'] not in perfect_tickers and c.get('score', 0) >= 8]
-        combined = perfect_candidates + other_candidates
-        final_results = combined[:100]
-
-    # For large index scans (like Nifty 500), cap at top 35 best-ranked setups to prevent payload bloat
-    if not is_total_market and len(final_results) > 35:
-        final_results = final_results[:35]
-
-    # Assign explicit 1-based ranks, target prices, verdicts and rationale
-    total_scanned = len(tickers)
-    for rank, item in enumerate(final_results, start=1):
-        item['rank'] = rank
-        # Optimize payload: Keep full history for top 15 setups, fetch on-demand for rest
-        if is_total_market and rank > 15:
-            item['history'] = []
-        prox = item['proximal']
-        distal = item['distal']
-        risk = abs(prox - distal)
-        is_dem = item['zone_type'] == 'Demand'
-        target = round(prox + (2.0 * risk) if is_dem else prox - (2.0 * risk), 2)
-        item['target'] = target
-        item['risk_reward'] = '1:2.0'
+        perfect_tickers = {c['ticker'] for c in perfect}
+        other = [c for c in results_list if c['ticker'] not in perfect_tickers and c.get('score', 0) >= 8]
+        combined = (perfect + other)[:max_count]
         
-        # Dedicated Trade Verdict Column
-        if rank == 1:
-            item['verdict'] = 'BEST OF BESTEST'
-            item['verdict_badge'] = '👑 BEST OF THE BESTEST'
-            item['verdict_desc'] = 'Top Market Pick • Ready to Trade'
-        elif rank <= 3:
-            item['verdict'] = 'PERFECT SETUP'
-            item['verdict_badge'] = '💎 PERFECT SETUP'
-            item['verdict_desc'] = 'High Conviction Trade'
-        else:
-            item['verdict'] = 'ELITE TRADE'
-            item['verdict_badge'] = '⭐ ELITE GRADE'
-            item['verdict_desc'] = 'Institutional Quality'
+        formatted = []
+        for rank, raw_item in enumerate(combined, start=1):
+            item = dict(raw_item)
+            item['rank'] = rank
+            # Optimize payload: Keep full history for top 15 setups, fetch on-demand for rest
+            if is_total_market and rank > 15:
+                item['history'] = []
+            prox = item['proximal']
+            distal = item['distal']
+            risk = abs(prox - distal)
+            is_dem = item['zone_type'] == 'Demand'
+            target = round(prox + (2.0 * risk) if is_dem else prox - (2.0 * risk), 2)
+            item['target'] = target
+            item['risk_reward'] = '1:2.0'
+            
+            # Dedicated Trade Verdict Column
+            if rank == 1:
+                item['verdict'] = 'BEST OF BESTEST'
+                item['verdict_badge'] = '👑 BEST OF THE BESTEST'
+                item['verdict_desc'] = f"Top {item['zone_type']} Pick • Ready to Trade"
+            elif rank <= 3:
+                item['verdict'] = 'PERFECT SETUP'
+                item['verdict_badge'] = '💎 PERFECT SETUP'
+                item['verdict_desc'] = 'High Conviction Trade'
+            else:
+                item['verdict'] = 'ELITE TRADE'
+                item['verdict_badge'] = '⭐ ELITE GRADE'
+                item['verdict_desc'] = 'Institutional Quality'
 
-        # Separate text / Rationale description
-        item['rationale'] = (
-            f"👑 INSTITUTIONAL TRADE PLAN (Rank #{rank} of {total_scanned} Stocks): "
-            f"{item['ticker']} is identified with an unmitigated {item['zone_type']} Zone ({item['pattern']}) "
-            f"featuring 0 prior tests, confirmed Double Strong Leg-out candles, and verified Achievement (breaking prior opposite {('Supply' if is_dem else 'Demand')} zone). "
-            f"Current price is ₹{item['current_price']} (just {item['dist_to_entry_pct']}% from optimal entry at ₹{prox}). "
-            f"Stop Loss is placed at ₹{distal} with a 1:2 Risk-Reward Target at ₹{target}. "
-            f"Supported by {item['trend']} trend structure with an Institutional Score of {item['score']}/14."
-        )
+            # Separate text / Rationale description
+            item['rationale'] = (
+                f"👑 INSTITUTIONAL TRADE PLAN (Rank #{rank} of {total_scanned} Stocks): "
+                f"{item['ticker']} is identified with an unmitigated {item['zone_type']} Zone ({item['pattern']}) "
+                f"featuring 0 prior tests, confirmed Double Strong Leg-out candles, and verified Achievement (breaking prior opposite {('Supply' if is_dem else 'Demand')} zone). "
+                f"Current price is ₹{item['current_price']} (just {item['dist_to_entry_pct']}% from optimal entry at ₹{prox}). "
+                f"Stop Loss is placed at ₹{distal} with a 1:2 Risk-Reward Target at ₹{target}. "
+                f"Supported by {item['trend']} trend structure with an Institutional Score of {item['score']}/14."
+            )
+            formatted.append(item)
+        return formatted
 
-    return final_results
+    demand_cands = [c for c in final_results if c.get('zone_type') == 'Demand']
+    supply_cands = [c for c in final_results if c.get('zone_type') == 'Supply']
+
+    max_c = 100 if is_total_market else 35
+    top_overall = format_ranked_list(sorted(final_results, key=rank_key), max_count=max_c)
+    top_demand = format_ranked_list(sorted(demand_cands, key=rank_key), max_count=max_c)
+    top_supply = format_ranked_list(sorted(supply_cands, key=rank_key), max_count=max_c)
+
+    if return_splits:
+        return top_overall, top_demand, top_supply
+    if zone_type == "Demand":
+        return top_demand
+    elif zone_type == "Supply":
+        return top_supply
+    return top_overall

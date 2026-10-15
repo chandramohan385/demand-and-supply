@@ -27,15 +27,24 @@ def generate_full_market_cache():
         t0 = time.time()
         # Full market scan across the complete universe of 2,349 NSE stocks
         top_universe = all_stocks
-        results = scan_tickers(top_universe, interval=interval, sector_map=SECTOR_MAP, is_total_market=True)
-        print(f"Scan for {interval} completed in {time.time()-t0:.2f}s with {len(results)} elite setups found")
+        results_overall, results_demand, results_supply = scan_tickers(
+            top_universe, 
+            interval=interval, 
+            sector_map=SECTOR_MAP, 
+            is_total_market=True, 
+            return_splits=True
+        )
+        print(f"Scan for {interval} completed in {time.time()-t0:.2f}s with {len(results_overall)} overall, {len(results_demand)} Demand, {len(results_supply)} Supply setups found")
         
-        best_pick = results[0] if results else None
         existing_cache[interval] = {
             'timestamp': time.time(),
             'total_scanned': len(all_stocks),
-            'best_pick': best_pick,
-            'data': results
+            'best_pick': results_overall[0] if results_overall else None,
+            'best_demand_pick': results_demand[0] if results_demand else None,
+            'best_supply_pick': results_supply[0] if results_supply else None,
+            'data': results_overall,
+            'demand_data': results_demand,
+            'supply_data': results_supply
         }
 
     with open(cache_file, 'w') as f:

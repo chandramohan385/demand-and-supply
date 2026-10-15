@@ -21,6 +21,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const bestestRationaleText = document.getElementById('bestest-rationale-text');
     const bestestChartBtn = document.getElementById('bestest-chart-btn');
 
+    // Zone Switcher State: 'ALL' | 'Demand' | 'Supply'
+    let currentZoneFilter = 'ALL';
+    let currentScanResult = null;
+
+    const zoneSwitchButtons = document.querySelectorAll('#zone-switch-group .zone-pill-btn');
+
+    zoneSwitchButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const zone = btn.getAttribute('data-zone');
+            if (currentZoneFilter === zone) return;
+            
+            currentZoneFilter = zone;
+            zoneSwitchButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            applyZoneFilter();
+        });
+    });
+
+    function applyZoneFilter() {
+        if (!currentScanResult) return;
+        
+        let activeData = [];
+        let activeBestPick = null;
+        
+        if (currentZoneFilter === 'Demand') {
+            activeData = (currentScanResult.demand_data && currentScanResult.demand_data.length > 0)
+                ? currentScanResult.demand_data 
+                : (currentScanResult.data ? currentScanResult.data.filter(x => x.zone_type === 'Demand') : []);
+            activeBestPick = currentScanResult.best_demand_pick || (activeData.length > 0 ? activeData[0] : null);
+        } else if (currentZoneFilter === 'Supply') {
+            activeData = (currentScanResult.supply_data && currentScanResult.supply_data.length > 0)
+                ? currentScanResult.supply_data 
+                : (currentScanResult.data ? currentScanResult.data.filter(x => x.zone_type === 'Supply') : []);
+            activeBestPick = currentScanResult.best_supply_pick || (activeData.length > 0 ? activeData[0] : null);
+        } else {
+            activeData = currentScanResult.data || [];
+            activeBestPick = currentScanResult.best_pick || (activeData.length > 0 ? activeData[0] : null);
+        }
+        
+        if (activeBestPick && bestestHeroCard) {
+            renderBestestHeroCard(activeBestPick);
+        } else if (bestestHeroCard) {
+            bestestHeroCard.classList.add('hidden');
+        }
+        
+        populateTable(activeData);
+    }
+
     async function executeScan(category) {
         const interval = timeframeSelect.value;
         const isTotal = category === 'TOTAL_MARKET';
@@ -59,14 +108,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isTotal) {
                 await new Promise(r => setTimeout(r, 1800));
             }
-            const response = await fetch(`/api/scan?interval=${interval}&category=${category}`);
+            const response = await fetch(`/api/scan?interval=${interval}&category=${category}&zone_type=${currentZoneFilter}`);
             const result = await response.json();
 
             if (result.status === 'success') {
-                if (result.best_pick && bestestHeroCard) {
-                    renderBestestHeroCard(result.best_pick);
-                }
-                populateTable(result.data);
+                currentScanResult = result;
+                applyZoneFilter();
             } else {
                 alert('Error scanning stocks: ' + result.message);
             }
@@ -105,6 +152,14 @@ document.addEventListener('DOMContentLoaded', () => {
         bestestScoreBadge.textContent = `${best.score}/14 ELITE`;
         bestestZoneBadge.textContent = `${best.zone_type} Zone (${best.pattern})`;
         bestestZoneBadge.className = `bestest-zone-pill ${best.zone_type === 'Demand' ? 'zone-demand' : 'zone-supply'}`;
+
+        const subtitle = best.zone_type === 'Demand'
+            ? 'The #1 High-Probability Institutional Demand Trade across the Market'
+            : (best.zone_type === 'Supply' 
+                ? 'The #1 High-Probability Institutional Supply Trade across the Market' 
+                : 'The #1 High-Probability Institutional Trade across the Whole Market');
+        const heroSubtitle = document.querySelector('.bestest-subtitle');
+        if (heroSubtitle) heroSubtitle.textContent = subtitle;
 
         bestestRationaleText.textContent = best.rationale || `Rank #1 Institutional Pick across 2,300+ NSE stocks — 0 tests, pristine momentum departure, and fresh unmitigated zone.`;
 
@@ -711,4 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scheduleZoneRedraw();
         }
     });
+
+    // Auto-trigger scan on initial load
+    executeScan('TOTAL_MARKET');
 });

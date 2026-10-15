@@ -134,6 +134,7 @@ def index():
 def api_scan():
     interval = request.args.get('interval', '1d')
     category = request.args.get('category', 'TOTAL_MARKET')
+    zone_type = request.args.get('zone_type', 'ALL')
     is_total_market = (category == 'TOTAL_MARKET')
 
     # Instant response for TOTAL_MARKET from pre-computed cache
@@ -145,10 +146,28 @@ def api_scan():
                     cache_data = json.load(f)
                 if interval in cache_data and cache_data[interval].get('data'):
                     entry = cache_data[interval]
+                    demand_data = entry.get('demand_data', [x for x in entry['data'] if x['zone_type'] == 'Demand'])
+                    supply_data = entry.get('supply_data', [x for x in entry['data'] if x['zone_type'] == 'Supply'])
+                    best_demand = entry.get('best_demand_pick', demand_data[0] if demand_data else None)
+                    best_supply = entry.get('best_supply_pick', supply_data[0] if supply_data else None)
+                    
+                    data = entry['data']
+                    best_pick = entry['best_pick']
+                    if zone_type == 'Demand':
+                        data = demand_data
+                        best_pick = best_demand
+                    elif zone_type == 'Supply':
+                        data = supply_data
+                        best_pick = best_supply
+                        
                     return jsonify({
                         'status': 'success',
-                        'data': entry['data'],
-                        'best_pick': entry['best_pick'],
+                        'data': data,
+                        'demand_data': demand_data,
+                        'supply_data': supply_data,
+                        'best_pick': best_pick,
+                        'best_demand_pick': best_demand,
+                        'best_supply_pick': best_supply,
                         'total_scanned': entry.get('total_scanned', len(STOCK_LISTS['TOTAL_MARKET'])),
                         'cached': True
                     })
@@ -159,13 +178,25 @@ def api_scan():
     tickers = STOCK_LISTS.get(category, STOCK_LISTS.get('TOTAL_MARKET', STOCK_LISTS['NIFTY_50']))
     
     try:
-        results = scan_tickers(tickers, interval=interval, sector_map=SECTOR_MAP, is_total_market=is_total_market)
+        results, demand_res, supply_res = scan_tickers(tickers, interval=interval, sector_map=SECTOR_MAP, is_total_market=is_total_market, return_splits=True)
+        data = results
         best_pick = results[0] if results else None
+        if zone_type == 'Demand':
+            data = demand_res
+            best_pick = demand_res[0] if demand_res else None
+        elif zone_type == 'Supply':
+            data = supply_res
+            best_pick = supply_res[0] if supply_res else None
+            
         total_count = len(STOCK_LISTS.get(category, tickers))
         return jsonify({
             'status': 'success',
-            'data': results,
+            'data': data,
+            'demand_data': demand_res,
+            'supply_data': supply_res,
             'best_pick': best_pick,
+            'best_demand_pick': demand_res[0] if demand_res else None,
+            'best_supply_pick': supply_res[0] if supply_res else None,
             'total_scanned': total_count
         })
     except Exception as e:

@@ -49,6 +49,24 @@
                         <option value="1mo">Monthly (1M)</option>
                         <option value="3mo">Quarterly (3M)</option>
                     </select>
+
+                    <!-- Segmented Zone Switch: All | Demand Zones (Top 100) | Supply Zones (Top 100) -->
+                    <div class="zone-switch-container">
+                        <div class="zone-switch-pill" id="zone-switch-group">
+                            <button type="button" class="zone-pill-btn active" data-zone="ALL" title="Show All Top 100 Setups">
+                                <span>🌐 All</span>
+                            </button>
+                            <button type="button" class="zone-pill-btn btn-demand" data-zone="Demand" title="Show Top 100 Demand Zones Only">
+                                <span class="pill-dot dot-demand"></span>
+                                <span>🟢 Demand Zones</span>
+                            </button>
+                            <button type="button" class="zone-pill-btn btn-supply" data-zone="Supply" title="Show Top 100 Supply Zones Only">
+                                <span class="pill-dot dot-supply"></span>
+                                <span>🔴 Supply Zones</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <button id="lazy-scan-btn" class="glow-btn lazy-gold-btn" title="1-Click: Scan all 2,300+ NSE stocks and find the single best institutional setup">
                         <span class="btn-text">👑 Best of Bestest (Lazy Mode)</span>
                         <span class="btn-glow gold-glow"></span>
